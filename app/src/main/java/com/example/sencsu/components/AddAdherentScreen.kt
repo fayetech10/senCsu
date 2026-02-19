@@ -3,10 +3,12 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -36,6 +38,13 @@ import com.example.sencsu.utils.toLocaleString
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
+import com.example.sencsu.data.remote.dto.PersonneChargeDto
+import com.example.sencsu.theme.AppColors
+import com.example.sencsu.theme.AppShapes
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
 private val NeutralDark = Color(0xFF1E293B) // Texte principal et boutons
 private val NeutralMedium = Color(0xFF64748B) // Texte secondaire
 private val NeutralLight = Color(0xFFF1F5F9) // Fonds légers
@@ -131,12 +140,17 @@ fun AddAdherentScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Navigation
+            // Navigation
             SimpleNavigation(
                 currentStep = currentStep,
                 totalSteps = steps.size,
                 isLoading = state.isLoading,
                 onPrevious = { if (currentStep > 0) currentStep-- },
-                onNext = { if (currentStep < steps.size - 1) currentStep++ },
+                onNext = {
+                    if (viewModel.validateStep(currentStep)) {
+                        if (currentStep < steps.size - 1) currentStep++
+                    }
+                },
                 onSubmit = { viewModel.submitWithUpload(context, agentId) },
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
@@ -194,7 +208,7 @@ fun ModernHeader(
     onBack: () -> Unit
 ) {
     Surface(
-        color = Color.White,
+        color = AppColors.SurfaceBackground,
         shadowElevation = 1.dp,
         modifier = Modifier
             .padding(vertical = 30.dp)
@@ -203,19 +217,18 @@ fun ModernHeader(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = null, tint = NeutralDark)
+                    Icon(Icons.Default.ArrowBack, contentDescription = null, tint = AppColors.TextMain)
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
-                    Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = NeutralDark)
-                    Text("Étape ${currentStep + 1} sur $totalSteps", fontSize = 12.sp, color = NeutralMedium)
+                    Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = AppColors.TextMain)
+                    Text("Étape ${currentStep + 1} sur $totalSteps", fontSize = 12.sp, color = AppColors.TextSub)
                 }
             }
 
@@ -225,10 +238,10 @@ fun ModernHeader(
                     text = "${totalCost.toLocaleString()} F",
                     fontWeight = FontWeight.Black,
                     fontSize = 19.sp,
-                    color = NeutralDark
+                    color = AppColors.BrandBlue
                 )
                 Surface(
-                    color = NeutralLight,
+                    color = AppColors.SurfaceAlt,
                     shape = RoundedCornerShape(4.dp)
                 ) {
                     Text(
@@ -236,7 +249,7 @@ fun ModernHeader(
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
-                        color = NeutralMedium
+                        color = AppColors.TextSub
                     )
                 }
             }
@@ -256,7 +269,7 @@ fun StepProgressBar(totalSteps: Int, currentStep: Int, modifier: Modifier = Modi
                     .weight(1f)
                     .height(4.dp)
                     .clip(CircleShape)
-                    .background(if (index <= currentStep) NeutralDark else BorderColor)
+                    .background(if (index <= currentStep) AppColors.BrandBlue else AppColors.BorderColor)
             )
         }
     }
@@ -266,15 +279,15 @@ fun StepProgressBar(totalSteps: Int, currentStep: Int, modifier: Modifier = Modi
 fun SectionCard(title: String, icon: ImageVector, content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, BorderColor)
+        shape = AppShapes.MediumRadius,
+        colors = CardDefaults.cardColors(containerColor = AppColors.SurfaceBackground),
+        border = BorderStroke(1.dp, AppColors.BorderColor)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, contentDescription = null, tint = NeutralMedium, modifier = Modifier.size(18.dp))
+                Icon(icon, contentDescription = null, tint = AppColors.BrandBlue, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(title, fontWeight = FontWeight.Bold, color = NeutralDark, fontSize = 15.sp)
+                Text(title, fontWeight = FontWeight.Bold, color = AppColors.TextMain, fontSize = 15.sp)
             }
             Spacer(modifier = Modifier.height(16.dp))
             content()
@@ -284,52 +297,215 @@ fun SectionCard(title: String, icon: ImageVector, content: @Composable ColumnSco
 
 // --- Sections du formulaire ---
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppDatePickerField(
+    label: String,
+    value: String?,
+    onDateSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    isError: Boolean = false,
+    errorMessage: String? = null
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState()
+
+    Column(modifier = modifier) {
+        Box {
+            OutlinedTextField(
+                value = value ?: "",
+                onValueChange = {},
+                readOnly = true,
+                label = { Text(label, color = if (isError) AppColors.StatusRed else AppColors.TextSub) },
+                placeholder = { Text("JJ/MM/AAAA", color = AppColors.TextSub.copy(alpha = 0.5f)) },
+                modifier = Modifier.fillMaxWidth(),
+                trailingIcon = {
+                    Icon(
+                        Icons.Default.DateRange,
+                        contentDescription = "Sélectionner une date",
+                        tint = if (isError) AppColors.StatusRed else AppColors.BrandBlue
+                    )
+                },
+                isError = isError,
+                shape = AppShapes.MediumRadius,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = AppColors.SurfaceBackground,
+                    unfocusedContainerColor = AppColors.SurfaceBackground,
+                    focusedIndicatorColor = if (isError) AppColors.StatusRed else AppColors.BrandBlue,
+                    unfocusedIndicatorColor = if (isError) AppColors.StatusRed else AppColors.BorderColor,
+                    errorIndicatorColor = AppColors.StatusRed
+                )
+            )
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clickable { showDialog = true }
+            )
+        }
+        if (isError && errorMessage != null) {
+            Text(
+                text = errorMessage,
+                color = AppColors.StatusRed,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(start = 8.dp, top = 4.dp)
+            )
+        }
+    }
+
+    if (showDialog) {
+        DatePickerDialog(
+            onDismissRequest = { showDialog = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val formattedDate = SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE)
+                                .format(Date(millis))
+                            onDateSelected(formattedDate)
+                        }
+                        showDialog = false
+                    }
+                ) { Text("OK", color = AppColors.BrandBlue) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) { Text("Annuler", color = AppColors.TextSub) }
+            },
+            colors = DatePickerDefaults.colors(containerColor = AppColors.SurfaceBackground)
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+}
+
+// --- Sections du formulaire ---
+
 @Composable
 fun IdentitySection(state: AddAdherentUiState, viewModel: AddAdherentViewModel) {
     SectionCard("Informations personnelles", Icons.Outlined.Person) {
-        FormTextField(value = state.prenoms, onValueChange = viewModel::updatePrenoms, label = "Prénoms", placeholder = "Prénoms*")
+        AppTextField(
+            value = state.prenoms,
+            onValueChange = viewModel::updatePrenoms,
+            label = "Prénoms*",
+            placeholder = "Ex: Mamadou",
+            isError = state.validationErrors.containsKey("prenoms"),
+            errorMessage = state.validationErrors["prenoms"]
+        )
         Spacer(modifier = Modifier.height(12.dp))
-        FormTextField(value = state.nom, onValueChange = viewModel::updateNom, label = "Nom", placeholder = "Nom de famille*")
+        AppTextField(
+            value = state.nom,
+            onValueChange = viewModel::updateNom,
+            label = "Nom*",
+            placeholder = "Ex: Diop",
+            isError = state.validationErrors.containsKey("nom"),
+            errorMessage = state.validationErrors["nom"]
+        )
         Spacer(modifier = Modifier.height(12.dp))
-        DatePickerField(label = "Date de naissance", value = state.dateNaissance, onDateSelected = viewModel::updateDateNaissance)
+        AppDatePickerField(
+            label = "Date de naissance*",
+            value = state.dateNaissance,
+            onDateSelected = viewModel::updateDateNaissance,
+            isError = state.validationErrors.containsKey("dateNaissance"),
+            errorMessage = state.validationErrors["dateNaissance"]
+        )
         Spacer(modifier = Modifier.height(12.dp))
-        SegmentedSelector(title = "Sexe*", options = listOf("M", "F"), selected = state.sexe, onSelect = viewModel::updateSexe)
+        AppDropdown(
+            label = "Sexe*",
+            options = FormConstants.SEXES,
+            selected = state.sexe,
+            onSelect = viewModel::updateSexe
+        )
         Spacer(modifier = Modifier.height(12.dp))
-        SegmentedSelector(title = "Situation*", options = FormConstants.SITUATIONS, selected = state.situationMatrimoniale, onSelect = viewModel::updateSituationMatrimoniale)
+        AppDropdown(
+            label = "Situation Matrimoniale*",
+            options = FormConstants.SITUATIONS,
+            selected = state.situationMatrimoniale,
+            onSelect = viewModel::updateSituationMatrimoniale
+        )
     }
 }
 
 @Composable
 fun ContactSection(state: AddAdherentUiState, viewModel: AddAdherentViewModel) {
     SectionCard("Contact & ID", Icons.Outlined.Phone) {
-        FormTextField(value = state.whatsapp, onValueChange = viewModel::updateWhatsapp, label = "WhatsApp", placeholder = "77...", keyboardType = KeyboardType.Phone)
-        Spacer(modifier = Modifier.height(12.dp))
-        SegmentedSelector(title = "Pièce*", options = FormConstants.TYPES_PIECE, selected = state.typePiece, onSelect = viewModel::updateTypePiece)
-        Spacer(modifier = Modifier.height(12.dp))
-        FormTextField(
-            value = if (state.typePiece == "CNI") state.numeroCNI else state.numeroExtrait,
-            onValueChange = if (state.typePiece == "CNI") viewModel::updateNumeroCNI else viewModel::updateNumeroExtrait,
-            label = "Numéro de pièce",
-            placeholder = "Entrez le numéro*"
+        AppTextField(
+            value = state.whatsapp,
+            onValueChange = viewModel::updateWhatsapp,
+            label = "WhatsApp*",
+            placeholder = "Ex: 77 123 45 67",
+            keyboardType = KeyboardType.Phone,
+            isError = state.validationErrors.containsKey("whatsapp"),
+            errorMessage = state.validationErrors["whatsapp"]
         )
+        Spacer(modifier = Modifier.height(12.dp))
+        AppDropdown(
+            label = "Type de pièce*",
+            options = FormConstants.TYPES_PIECE,
+            selected = state.typePiece,
+            onSelect = viewModel::updateTypePiece
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        if (state.typePiece == "CNI") {
+            AppTextField(
+                value = state.numeroCNI,
+                onValueChange = viewModel::updateNumeroCNI,
+                label = "Numéro CNI*",
+                placeholder = "Entrez le numéro",
+                isError = state.validationErrors.containsKey("numeroCNI"),
+                errorMessage = state.validationErrors["numeroCNI"]
+            )
+        } else {
+            AppTextField(
+                value = state.numeroExtrait,
+                onValueChange = viewModel::updateNumeroExtrait,
+                label = "Numéro Extrait*",
+                placeholder = "Entrez le numéro",
+                isError = state.validationErrors.containsKey("numeroExtrait"),
+                errorMessage = state.validationErrors["numeroExtrait"]
+            )
+        }
     }
 }
 
 @Composable
 fun LocationSection(state: AddAdherentUiState, viewModel: AddAdherentViewModel) {
     SectionCard("Localisation", Icons.Outlined.LocationOn) {
-        SegmentedSelector(title = "Département*", options = FormConstants.DEPARTEMENTS, selected = state.departement, onSelect = viewModel::updateDepartement)
+        AppDropdown(
+            label = "Département*",
+            options = FormConstants.DEPARTEMENTS,
+            selected = state.departement,
+            onSelect = viewModel::updateDepartement
+        )
         Spacer(modifier = Modifier.height(12.dp))
-        FormTextField(value = state.commune, onValueChange = viewModel::updateCommune, label = "Commune", placeholder = "Ville/Commune*")
+        AppTextField(
+            value = state.commune,
+            onValueChange = viewModel::updateCommune,
+            label = "Commune*",
+            placeholder = "Ville/Commune",
+            isError = state.validationErrors.containsKey("commune"),
+            errorMessage = state.validationErrors["commune"]
+        )
         Spacer(modifier = Modifier.height(12.dp))
-        FormTextField(value = state.adresse, onValueChange = viewModel::updateAdresse, label = "Adresse", placeholder = "Quartier, rue...*")
+        AppTextField(
+            value = state.adresse,
+            onValueChange = viewModel::updateAdresse,
+            label = "Adresse*",
+            placeholder = "Quartier, rue...",
+            isError = state.validationErrors.containsKey("adresse"),
+            errorMessage = state.validationErrors["adresse"]
+        )
     }
 }
 
 @Composable
 fun PhotosSection(state: AddAdherentUiState, viewModel: AddAdherentViewModel) {
     SectionCard("Documents", Icons.Outlined.CameraAlt) {
-        ImagePickerComponent(label = "Photo d'identité", imageUri = state.photoUri.toString(), onImageSelected = viewModel::updatePhotoUri)
+        ImagePickerComponent(
+            label = "Photo d'identité*",
+            imageUri = state.photoUri.toString(),
+            onImageSelected = viewModel::updatePhotoUri,
+            required = true,
+            isError = state.validationErrors.containsKey("photoUri")
+        )
         Spacer(modifier = Modifier.height(12.dp))
         ImagePickerComponent(label = "CNI Recto", imageUri = state.rectoUri.toString(), onImageSelected = viewModel::updateRectoUri)
         Spacer(modifier = Modifier.height(12.dp))
@@ -341,19 +517,97 @@ fun PhotosSection(state: AddAdherentUiState, viewModel: AddAdherentViewModel) {
 fun BeneficiariesSection(state: AddAdherentUiState, viewModel: AddAdherentViewModel, onShowAlert: (String, String, () -> Unit) -> Unit) {
     SectionCard("Bénéficiaires", Icons.Outlined.Group) {
         state.dependants.forEachIndexed { index, dep ->
-            DependantCard(dependant = dep, onEdit = { viewModel.showEditDependantModal(index, dep) }, onDelete = {
-                onShowAlert("Supprimer", "Retirer ce bénéficiaire ?") { viewModel.removeDependant(index) }
-            })
+            AppDependantCard(
+                dependant = dep,
+                onEdit = { viewModel.showEditDependantModal(index, dep) },
+                onDelete = {
+                    onShowAlert("Supprimer", "Retirer ce bénéficiaire ?") { viewModel.removeDependant(index) }
+                }
+            )
             Spacer(modifier = Modifier.height(8.dp))
         }
         OutlinedButton(
             onClick = { viewModel.showAddDependantModal() },
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            border = BorderStroke(1.dp, NeutralDark.copy(0.2f))
+            shape = AppShapes.MediumRadius,
+            border = BorderStroke(1.dp, AppColors.BrandBlue.copy(0.2f)),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = AppColors.BrandBlue)
         ) {
             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-            Text("Ajouter une personne", color = NeutralDark)
+            Text("Ajouter une personne")
+        }
+    }
+}
+
+@Composable
+fun AppDependantCard(
+    dependant: PersonneChargeDto,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 10.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = AppColors.BrandBlue.copy(alpha = 0.05f)
+        ),
+        shape = AppShapes.SmallRadius
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = "${dependant.prenoms} ${dependant.nom}",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AppColors.TextMain,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+
+                    Text(
+                        text = "${dependant.sexe}",
+                        fontSize = 12.sp,
+                        color = AppColors.TextSub,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+                    Text(
+                        text = "Né(e) le: ${dependant.dateNaissance}",
+                        fontSize = 12.sp,
+                        color = AppColors.TextSub
+                    )
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Create,
+                        contentDescription = "Modifier",
+                        tint = AppColors.TextSub,
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clickable { onEdit() }
+                    )
+
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Supprimer",
+                        tint = AppColors.StatusRed,
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clickable { onDelete() }
+                    )
+                }
+            }
         }
     }
 }
@@ -373,10 +627,11 @@ fun SimpleNavigation(
             OutlinedButton(
                 onClick = onPrevious,
                 modifier = Modifier.weight(1f).height(50.dp),
-                shape = RoundedCornerShape(8.dp),
-                border = BorderStroke(1.dp, BorderColor)
+                shape = AppShapes.MediumRadius,
+                border = BorderStroke(1.dp, AppColors.BorderColor),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = AppColors.TextSub)
             ) {
-                Text("Précédent", color = NeutralMedium)
+                Text("Précédent")
             }
         }
 
@@ -384,16 +639,16 @@ fun SimpleNavigation(
             onClick = if (currentStep == totalSteps - 1) onSubmit else onNext,
             modifier = Modifier.weight(1f).height(50.dp),
             enabled = !isLoading,
-            shape = RoundedCornerShape(8.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = NeutralDark)
+            shape = AppShapes.MediumRadius,
+            colors = ButtonDefaults.buttonColors(containerColor = AppColors.BrandBlue)
         ) {
             if (isLoading) {
-                AppProgressIndicator(
-                    // progress = state.uploadProgress, // Optionnel : si tu veux voir l'avancement
+                CircularProgressIndicator(
                     color = Color.White,
-                    trackColor = Color.White.copy(alpha = 0.3f),
-                    modifier = Modifier.size(20.dp)
-                )            } else {
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
                 Text(if (currentStep == totalSteps - 1) "Enregistrer" else "Suivant")
             }
         }
@@ -404,16 +659,16 @@ fun SimpleNavigation(
 fun SimpleAlertDialog(title: String, message: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title, fontWeight = FontWeight.Bold) },
-        text = { Text(message) },
+        title = { Text(title, fontWeight = FontWeight.Bold, color = AppColors.TextMain) },
+        text = { Text(message, color = AppColors.TextMain) },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Confirmer", color = Color.Red) }
+            TextButton(onClick = onConfirm) { Text("Confirmer", color = AppColors.StatusRed) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Annuler", color = NeutralMedium) }
+            TextButton(onClick = onDismiss) { Text("Annuler", color = AppColors.TextSub) }
         },
-        containerColor = Color.White,
-        shape = RoundedCornerShape(12.dp)
+        containerColor = AppColors.SurfaceBackground,
+        shape = AppShapes.MediumRadius
     )
 }
 
@@ -422,8 +677,8 @@ fun SimpleAlertDialog(title: String, message: String, onConfirm: () -> Unit, onD
 fun AppProgressIndicator(
     progress: Float? = null, // Si null, il tourne indéfiniment
     modifier: Modifier = Modifier.size(24.dp),
-    color: Color = NeutralDark,
-    trackColor: Color = NeutralDark.copy(alpha = 0.1f),
+    color: Color = AppColors.BrandBlue,
+    trackColor: Color = AppColors.BrandBlue.copy(alpha = 0.1f),
     strokeWidth: Dp = 3.dp
 ) {
     if (progress != null) {
@@ -469,6 +724,132 @@ fun AppProgressIndicator(
                 sweepAngle = 90f, // Longueur du trait qui tourne
                 useCenter = false,
                 style = stroke
+            )
+        }
+    }
+}
+// --- Composants AppTheme ---
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppTextField(
+    value: String?,
+    onValueChange: (String) -> Unit,
+    label: String,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    isError: Boolean = false,
+    errorMessage: String? = null,
+    readOnly: Boolean = false,
+    trailingIcon: @Composable (() -> Unit)? = null,
+    onClick: (() -> Unit)? = null
+) {
+    Column(modifier = modifier) {
+        if (value != null) {
+            OutlinedTextField(
+                value = value,
+                onValueChange = onValueChange,
+                label = { Text(label, color = if (isError) AppColors.StatusRed else AppColors.TextSub) },
+                placeholder = { Text(placeholder, color = AppColors.TextSub.copy(alpha = 0.5f)) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
+                enabled = onClick == null,
+                readOnly = readOnly,
+                isError = isError,
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                shape = AppShapes.MediumRadius,
+                trailingIcon = trailingIcon,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = AppColors.SurfaceBackground,
+                    unfocusedContainerColor = AppColors.SurfaceBackground,
+                    disabledContainerColor = AppColors.SurfaceBackground,
+                    focusedIndicatorColor = if (isError) AppColors.StatusRed else AppColors.BrandBlue,
+                    unfocusedIndicatorColor = if (isError) AppColors.StatusRed else AppColors.BorderColor,
+                    errorIndicatorColor = AppColors.StatusRed,
+                    cursorColor = AppColors.BrandBlue,
+                    focusedLabelColor = AppColors.BrandBlue,
+                    unfocusedLabelColor = AppColors.TextSub,
+                )
+            )
+        }
+        if (isError && errorMessage != null) {
+            Text(
+                text = errorMessage,
+                color = AppColors.StatusRed,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(start = 8.dp, top = 4.dp)
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppDropdown(
+    label: String,
+    options: List<String>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    isError: Boolean = false,
+    errorMessage: String? = null
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = modifier) {
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded }
+        ) {
+            OutlinedTextField(
+                value = selected,
+                onValueChange = {},
+                readOnly = true,
+                label = {
+                    Text(
+                        label,
+                        color = if (isError) AppColors.StatusRed else AppColors.TextSub
+                    )
+                },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(),
+                isError = isError,
+                shape = AppShapes.MediumRadius,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = AppColors.SurfaceBackground,
+                    unfocusedContainerColor = AppColors.SurfaceBackground,
+                    focusedIndicatorColor = if (isError) AppColors.StatusRed else AppColors.BrandBlue,
+                    unfocusedIndicatorColor = if (isError) AppColors.StatusRed else AppColors.BorderColor,
+                    errorIndicatorColor = AppColors.StatusRed
+                )
+            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(AppColors.SurfaceBackground)
+            ) {
+                options.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option, color = AppColors.TextMain) },
+                        onClick = {
+                            onSelect(option)
+                            expanded = false
+                        },
+                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                    )
+                }
+            }
+        }
+        if (isError && errorMessage != null) {
+            Text(
+                text = errorMessage,
+                color = AppColors.StatusRed,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(start = 8.dp, top = 4.dp)
             )
         }
     }

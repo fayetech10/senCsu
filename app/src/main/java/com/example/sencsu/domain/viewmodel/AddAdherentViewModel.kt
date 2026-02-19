@@ -43,24 +43,24 @@ class AddAdherentViewModel @Inject constructor(
     private val _uiEvent = Channel<AddAdherentUiEvent>()
     val uiEvent = _uiEvent.receiveAsFlow()
 
-    // --- Mises à jour des champs Adhérent ---
-    fun updatePrenoms(value: String) = _uiState.update { it.copy(prenoms = value) }
-    fun updateNom(value: String) = _uiState.update { it.copy(nom = value) }
-    fun updateAdresse(value: String) = _uiState.update { it.copy(adresse = value) }
-    fun updateLieuNaissance(value: String) = _uiState.update { it.copy(lieuNaissance = value) }
+    // --- Mises à jour des champs Adhérent avec nettoyage d'erreurs ---
+    fun updatePrenoms(value: String) = _uiState.update { it.copy(prenoms = value, validationErrors = it.validationErrors - "prenoms") }
+    fun updateNom(value: String) = _uiState.update { it.copy(nom = value, validationErrors = it.validationErrors - "nom") }
+    fun updateAdresse(value: String) = _uiState.update { it.copy(adresse = value, validationErrors = it.validationErrors - "adresse") }
+    fun updateLieuNaissance(value: String) = _uiState.update { it.copy(lieuNaissance = value, validationErrors = it.validationErrors - "lieuNaissance") }
     fun updateSexe(value: String) = _uiState.update { it.copy(sexe = value) }
-    fun updateDateNaissance(date: String) = _uiState.update { it.copy(dateNaissance = date) }
+    fun updateDateNaissance(date: String) = _uiState.update { it.copy(dateNaissance = date, validationErrors = it.validationErrors - "dateNaissance") }
     fun updateSituationMatrimoniale(value: String) = _uiState.update { it.copy(situationMatrimoniale = value) }
-    fun updateWhatsapp(value: String) = _uiState.update { it.copy(whatsapp = Formatters.formatPhoneNumber(value)) }
+    fun updateWhatsapp(value: String) = _uiState.update { it.copy(whatsapp = Formatters.formatPhoneNumber(value), validationErrors = it.validationErrors - "whatsapp") }
     fun updateSecteurActivite(value: String) = _uiState.update { it.copy(secteurActivite = value) }
     fun updateTypePiece(value: String) = _uiState.update { it.copy(typePiece = value) }
-    fun updateNumeroCNI(value: String) = _uiState.update { it.copy(numeroCNI = value) }
-    fun updateNumeroExtrait(value: String) = _uiState.update { it.copy(numeroExtrait = value) }
+    fun updateNumeroCNI(value: String) = _uiState.update { it.copy(numeroCNI = value, validationErrors = it.validationErrors - "numeroCNI") }
+    fun updateNumeroExtrait(value: String) = _uiState.update { it.copy(numeroExtrait = value, validationErrors = it.validationErrors - "numeroExtrait") }
     fun updateDepartement(value: String) = _uiState.update { it.copy(departement = value) }
-    fun updateCommune(value: String) = _uiState.update { it.copy(commune = value) }
+    fun updateCommune(value: String) = _uiState.update { it.copy(commune = value, validationErrors = it.validationErrors - "commune") }
 
     // --- Photos Adhérent Principal ---
-    fun updatePhotoUri(uri: Uri?) = _uiState.update { it.copy(photoUri = uri) }
+    fun updatePhotoUri(uri: Uri?) = _uiState.update { it.copy(photoUri = uri, validationErrors = it.validationErrors - "photoUri") }
     fun updateRectoUri(uri: Uri?) = _uiState.update { it.copy(rectoUri = uri) }
     fun updateVersoUri(uri: Uri?) = _uiState.update { it.copy(versoUri = uri) }
 
@@ -275,4 +275,44 @@ class AddAdherentViewModel @Inject constructor(
     }
 
     private fun calculateTotalCost(count: Int): Int = ADHERENT_PRICE + (count * DEPENDANT_PRICE)
+
+    // --- Validation ---
+    fun validateStep(step: Int): Boolean {
+        val errors = mutableMapOf<String, String>()
+        val state = _uiState.value
+
+        when (step) {
+            0 -> { // Identité
+                if (state.prenoms.isBlank()) errors["prenoms"] = "Le prénom est requis"
+                if (state.nom.isBlank()) errors["nom"] = "Le nom est requis"
+                if (state.dateNaissance.isBlank()) errors["dateNaissance"] = "La date de naissance est requise"
+            }
+            1 -> { // Contact & ID
+                if (state.whatsapp.isBlank()) errors["whatsapp"] = "Le numéro WhatsApp est requis"
+                // if (state.whatsapp.length < 9) errors["whatsapp"] = "Numéro invalide" // Exemple validation
+                
+                if (state.typePiece == "CNI") {
+                    if (state.numeroCNI.isBlank()) errors["numeroCNI"] = "Le numéro CNI est requis"
+                } else {
+                    if (state.numeroExtrait.isBlank()) errors["numeroExtrait"] = "Le numéro d'extrait est requis"
+                }
+            }
+            2 -> { // Localisation
+                if (state.commune.isBlank()) errors["commune"] = "La commune est requise"
+                if (state.adresse.isBlank()) errors["adresse"] = "L'adresse est requise"
+            }
+            3 -> { // Photos
+                if (state.photoUri == null) errors["photoUri"] = "La photo d'identité est requise"
+            }
+        }
+
+        if (errors.isNotEmpty()) {
+            _uiState.update { it.copy(validationErrors = errors) }
+            return false
+        }
+        
+        // Clear previous errors if valid
+        _uiState.update { it.copy(validationErrors = emptyMap()) }
+        return true
+    }
 }

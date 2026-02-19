@@ -65,6 +65,7 @@ fun AdherentDetailsScreen(
     // États pour les modales
     var showPersonneDetailsModal by remember { mutableStateOf<PersonneChargeDto?>(null) }
     var showAddPersonneModal by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.uiEvent.collect { event ->
@@ -199,14 +200,38 @@ fun AdherentDetailsScreen(
                     fontWeight = FontWeight.Bold
                 )
 
-                IconButton(
-                    onClick = { viewModel.showDeleteAdherentConfirmation() },
-                    colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = AppColors.StatusRed.copy(alpha = 0.2f),
-                        contentColor = Color.White // Rouge sur rouge ça se voit pas bien, White c'est mieux sur fond foncé
-                    )
-                ) {
-                    Icon(Icons.Outlined.Delete, contentDescription = "Supprimer")
+                Box {
+                    IconButton(
+                        onClick = { showMenu = true },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = Color.White.copy(alpha = 0.2f),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(Icons.Rounded.MoreVert, contentDescription = "Options")
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        containerColor = AppColors.SurfaceBackground
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Modifier l'adhérent", color = AppColors.TextMain) },
+                            onClick = {
+                                showMenu = false
+                                // TODO: Naviguer vers l'écran de modification
+                            },
+                            leadingIcon = { Icon(Icons.Rounded.Edit, null, tint = AppColors.TextMain) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Supprimer l'adhérent", color = AppColors.StatusRed) },
+                            onClick = {
+                                showMenu = false
+                                viewModel.showDeleteAdherentConfirmation()
+                            },
+                            leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = AppColors.StatusRed) }
+                        )
+                    }
                 }
             }
 
@@ -317,7 +342,7 @@ private fun ProfileSection(
                     filename = adherent.photo,
                     sessionManager = sessionManager,
                     modifier = Modifier
-                        .size(110.dp)
+                        .size(90.dp)
                         .clip(CircleShape)
                         .background(AppColors.SurfaceAlt)
                         .clickable { viewModel.openImagePreview(adherent.photo) },
@@ -546,7 +571,7 @@ private fun PersonalInfo(adherent: AdherentDto) {
             InfoRowCompact(Icons.Rounded.Fingerprint, "CNI", adherent.numeroCNi ?: "Non renseigné")
             InfoRowCompact(Icons.Rounded.Cake, "Né(e) le", adherent.dateNaissance ?: "Non renseigné")
             InfoRowCompact(Icons.Rounded.Place, "Adresse", adherent.adresse ?: "Non renseigné")
-            InfoRowCompact(Icons.Rounded.Phone, "Téléphone", adherent.telephone ?: "Non renseigné")
+            InfoRowCompact(Icons.Rounded.Phone, "Téléphone", adherent.whatsapp ?: "Non renseigné")
         }
     }
 }
@@ -960,42 +985,134 @@ private fun PersonneDetailsModal(
     onDelete: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    // ... Simplified reuse of previous modal logic with updated colors ...
-     val context = LocalContext.current
-     val imageUrl = ApiConfig.getImageUrl(personne.photo)
-     
-     Dialog(onDismissRequest = onDismiss) {
-         Card(
-             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
-             shape = AppShapes.LargeRadius,
-             colors = CardDefaults.cardColors(containerColor = AppColors.SurfaceBackground)
-         ) {
-             Column(
-                 modifier = Modifier.padding(24.dp),
-                 horizontalAlignment = Alignment.CenterHorizontally
-             ) {
-                 AsyncImage(
+    val context = LocalContext.current
+    val imageUrl = ApiConfig.getImageUrl(personne.photo)
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight(),
+            shape = AppShapes.LargeRadius,
+            colors = CardDefaults.cardColors(containerColor = AppColors.SurfaceBackground)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header avec bouton fermer
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(24.dp)
+                    ) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Fermer", tint = AppColors.TextSub)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                AsyncImage(
                     model = ImageRequest.Builder(context).data(imageUrl).build(),
                     contentDescription = null,
-                    modifier = Modifier.size(100.dp).clip(CircleShape).background(AppColors.SurfaceAlt),
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(CircleShape)
+                        .background(AppColors.SurfaceAlt),
                     contentScale = ContentScale.Crop
-                 )
-                 Spacer(modifier = Modifier.height(16.dp))
-                 Text("${personne.prenoms} ${personne.nom}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                 
-                 Spacer(modifier = Modifier.height(24.dp))
-                 
-                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                     OutlinedButton(onClick = onDelete, colors = ButtonDefaults.outlinedButtonColors(contentColor = AppColors.StatusRed)) {
-                         Text("Supprimer")
-                     }
-                     Button(onClick = onEdit, colors = ButtonDefaults.buttonColors(containerColor = AppColors.BrandBlue)) {
-                         Text("Modifier")
-                     }
-                 }
-             }
-         }
-     }
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Text(
+                    "${personne.prenoms} ${personne.nom}",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    color = AppColors.TextMain
+                )
+
+                personne.lienParent?.let { lien ->
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Badge(
+                        containerColor = AppColors.BrandBlue.copy(alpha = 0.1f),
+                        contentColor = AppColors.BrandBlue
+                    ) {
+                        Text(lien.uppercase())
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // Informations détaillées
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    InfoItem(Icons.Rounded.Wc, "Sexe", personne.sexe ?: "Non spécifié")
+                    InfoItem(Icons.Rounded.Cake, "Date de naissance", personne.dateNaissance ?: "Non spécifié")
+                    InfoItem(Icons.Rounded.Place, "Lieu de naissance", personne.lieuNaissance ?: "Non spécifié")
+                    InfoItem(Icons.Rounded.Fingerprint, "Numéro CNI", personne.numeroCNi ?: "Non spécifié")
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(
+                        onClick = onDelete,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AppColors.StatusRed),
+                        border = BorderStroke(1.dp, AppColors.StatusRed.copy(alpha = 0.5f))
+                    ) {
+                        Icon(Icons.Rounded.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Supprimer")
+                    }
+                    Button(
+                        onClick = onEdit,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = AppColors.BrandBlue)
+                    ) {
+                        Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Modifier")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoItem(
+    icon: ImageVector,
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            icon,
+            contentDescription = label,
+            tint = AppColors.TextSub,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = AppColors.TextSub
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = AppColors.TextMain
+            )
+        }
+    }
 }
 
 @Composable

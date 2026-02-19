@@ -35,15 +35,17 @@ data class AddAdherentUiState(
     // État du Modal (Ajout/Edition Dépendant)
     val isModalVisible: Boolean = false,
     val editingIndex: Int? = null, // null = création, Int = modification
-    val currentDependant: PersonneChargeDto = PersonneChargeDto(), // Assurez-vous d'avoir un constructeur par défaut ou vide
+    val currentDependant: PersonneChargeDto = PersonneChargeDto(),
 
     // Photos temporaires pour le modal
     var photo: String? = "",
     var photoRecto: String? = "",
     var photoVerso: String? = "",
 
-
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    
+    // Erreurs de validation
+    val validationErrors: Map<String, String> = emptyMap()
 ) {
     // Propriété calculée : Est-ce que le formulaire principal est valide ?
     val isFormValid: Boolean
@@ -59,9 +61,4 @@ data class AddAdherentUiState(
                     pieceValide &&
                     photoUri != null
         }
-
-    // Propriété calculée : Coût totalval totalCost: Int = 4500
-
-
-
 }
