@@ -29,6 +29,12 @@ data class AddAdherentUiState(
     val rectoUri: Uri? = null,
     val versoUri: Uri? = null,
     val uploadProgress: Float = 0f,
+
+    // Existing server-side photos (kept in edit mode if not replaced)
+    val existingPhotoUrl: String? = null,
+    val existingRectoUrl: String? = null,
+    val existingVersoUrl: String? = null,
+
     // Liste des dépendants validés
     val dependants: List<PersonneChargeDto> = emptyList(),
 

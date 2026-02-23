@@ -11,8 +11,12 @@ import com.example.sencsu.data.remote.dto.PersonneChargeDto
 import com.example.sencsu.data.repository.AdherentRepository
 import com.example.sencsu.data.repository.Cotisationepository
 import com.example.sencsu.data.repository.DashboardRepository
+import com.example.sencsu.data.repository.FileRepository
 import com.example.sencsu.data.repository.PaiementRepository
 import com.example.sencsu.data.repository.SessionManager
+import com.example.sencsu.data.local.dao.AdherentDao
+import android.content.Context
+import android.net.Uri
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -43,7 +47,9 @@ class AdherentDetailsViewModel @Inject constructor(
     val sessionManager: SessionManager,
     private val paiementRepository: PaiementRepository,
     private val cotisationRepository: Cotisationepository,
-    private val dashdoardRepository: DashboardRepository
+    private val dashdoardRepository: DashboardRepository,
+    private val fileRepository: FileRepository,
+    private val adherentDao: AdherentDao
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(AdherentDetailsState())
@@ -115,22 +121,30 @@ class AdherentDetailsViewModel @Inject constructor(
         val id = adherentIdStr?.toLongOrNull() ?: return
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, showDeleteAdherentDialog = false) }
-            try {
-                adherentRepository.deleteAdherent(id)
-                // Mise à jour silencieuse du dashboard en arrière-plan
-                launch {
-                   val  reuslt = dashdoardRepository.getDashboardData()
-                    Log.d("Adherent", "Adherent : ${reuslt.data.size}")
+            adherentRepository.deleteAdherent(id).fold(
+                onSuccess = {
+                    // Supprimer du cache local
+                    launch { adherentDao.deleteByRemoteId(id) }
+
+                    // Mise à jour silencieuse du dashboard en arrière-plan
+                    launch {
+                        try {
+                            val result = dashdoardRepository.getDashboardData()
+                            Log.d("Adherent", "Dashboard list updated, size : ${result.data.size}")
+                        } catch (e: Exception) {
+                            Log.e("Adherent", "Failed to update dashboard list in background", e)
+                        }
+                    }
+
+                    _uiEvent.emit(DetailsUiEvent.ShowSnackbar("Adhérent supprimé"))
+                    _uiEvent.emit(DetailsUiEvent.AdherentDeleted)
+                },
+                onFailure = { e ->
+                    Log.e("Adherent", e.message.toString())
+                    _state.update { it.copy(isLoading = false) }
+                    _uiEvent.emit(DetailsUiEvent.ShowSnackbar("Erreur lors de la suppression: ${e.message}"))
                 }
-
-                _uiEvent.emit(DetailsUiEvent.ShowSnackbar("Adhérent supprimé"))
-                _uiEvent.emit(DetailsUiEvent.AdherentDeleted)
-
-            } catch (e: Exception) {
-                Log.e("Adherent",e.message.toString())
-                _state.update { it.copy(isLoading = false) }
-                _uiEvent.emit(DetailsUiEvent.ShowSnackbar("Erreur: ${e.message}"))
-            }
+            )
         }
     }
 
@@ -138,15 +152,20 @@ class AdherentDetailsViewModel @Inject constructor(
     fun cancelDeletePersonne() = _state.update { it.copy(personToDelete = null) }
 
     fun confirmDeletePersonne() {
+        val adherentId = adherentIdStr?.toLongOrNull() ?: return
         val personneId = _state.value.personToDelete?.id ?: return
         viewModelScope.launch {
-            try {
-                adherentRepository.deletePersonneCharge(personneId)
-                _uiEvent.emit(DetailsUiEvent.ShowSnackbar("Bénéficiaire supprimé"))
-                refresh()
-            } catch (e: Exception) {
-                _uiEvent.emit(DetailsUiEvent.ShowSnackbar("Erreur: ${e.message}"))
-            }
+            _state.update { it.copy(isLoading = true) }
+            adherentRepository.deletePersonneCharge(adherentId, personneId).fold(
+                onSuccess = {
+                    _uiEvent.emit(DetailsUiEvent.ShowSnackbar("Bénéficiaire supprimé"))
+                    refresh()
+                },
+                onFailure = { e ->
+                    _state.update { it.copy(isLoading = false) }
+                    _uiEvent.emit(DetailsUiEvent.ShowSnackbar("Erreur: ${e.message}"))
+                }
+            )
             cancelDeletePersonne()
         }
     }
@@ -160,17 +179,45 @@ class AdherentDetailsViewModel @Inject constructor(
     fun onDismissAddPersonneModal() = _state.update { it.copy(showAddPersonneModal = false) }
     fun onNewPersonneChange(p: PersonneChargeDto) = _state.update { it.copy(newPersonne = p) }
 
-    fun onSaveNewPersonne() {
+    fun onSaveNewPersonne(context: Context) {
         val id = adherentIdStr?.toLongOrNull() ?: return
         viewModelScope.launch {
+            _state.update { it.copy(isLoading = true) }
+            
             try {
-                adherentRepository.addPersonneCharge(id, _state.value.newPersonne)
-                _uiEvent.emit(DetailsUiEvent.ShowSnackbar("Ajout réussi"))
-                onDismissAddPersonneModal()
-                refresh()
+                // 1. Uploader les images si nécessaires
+                val updatedPersonne = uploadPersonneImages(context, _state.value.newPersonne)
+                
+                // 2. Appel API
+                adherentRepository.addPersonneCharge(id, updatedPersonne).fold(
+                    onSuccess = {
+                        _uiEvent.emit(DetailsUiEvent.ShowSnackbar("Bénéficiaire ajouté avec succès"))
+                        onDismissAddPersonneModal()
+                        refresh()
+                    },
+                    onFailure = { e ->
+                        _state.update { it.copy(isLoading = false) }
+                        _uiEvent.emit(DetailsUiEvent.ShowSnackbar("Erreur: ${e.message}"))
+                    }
+                )
             } catch (e: Exception) {
-                _uiEvent.emit(DetailsUiEvent.ShowSnackbar("Erreur: ${e.message}"))
+                _state.update { it.copy(isLoading = false) }
+                _uiEvent.emit(DetailsUiEvent.ShowSnackbar("Erreur lors de l'upload: ${e.message}"))
             }
         }
+    }
+
+    private suspend fun uploadPersonneImages(context: Context, personne: PersonneChargeDto): PersonneChargeDto {
+        suspend fun uploadIfLocal(uriString: String?): String? {
+            return if (uriString?.startsWith("content://") == true) {
+                fileRepository.uploadImage(context, Uri.parse(uriString)).getOrNull()
+            } else uriString
+        }
+
+        return personne.copy(
+            photo = uploadIfLocal(personne.photo),
+            photoRecto = uploadIfLocal(personne.photoRecto),
+            photoVerso = uploadIfLocal(personne.photoVerso)
+        )
     }
 }

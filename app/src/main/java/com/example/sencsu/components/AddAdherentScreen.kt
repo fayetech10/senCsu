@@ -1,3 +1,5 @@
+package com.example.sencsu.components
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -26,7 +28,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.collectAsState
 import com.example.sencsu.components.forms.*
 import com.example.sencsu.components.modals.AddDependantModalContent
 import com.example.sencsu.data.remote.dto.AdherentDto
@@ -45,23 +47,21 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val NeutralDark = Color(0xFF1E293B) // Texte principal et boutons
-private val NeutralMedium = Color(0xFF64748B) // Texte secondaire
-private val NeutralLight = Color(0xFFF1F5F9) // Fonds légers
-private val BorderColor = Color(0xFFE2E8F0)
-private val SuccessGreen = Color(0xFF10B981)
+
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun AddAdherentScreen(
     onBack: () -> Unit,
-    onNavigateToPayment: (adherentId: Long, montantTotal: Int) -> Unit,
+    onNavigateToPayment: (adherentId: Long?, localAdherentId: Long?, montantTotal: Int) -> Unit,
     agentId: Long?,
     viewModel: AddAdherentViewModel = hiltViewModel(),
+    onNavigateBack: (() -> Unit)? = null,  // Used after successful edit
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val isEditMode = viewModel.isEditMode
 
     var currentStep by remember { mutableStateOf(0) }
     val steps = listOf("Identité", "Contact", "Zone", "Photos", "Bénéficiaires")
@@ -75,11 +75,13 @@ fun AddAdherentScreen(
         viewModel.uiEvent.collect { event ->
             when (event) {
                 is AddAdherentUiEvent.NavigateToPayment -> {
-                    event.adherentId?.let {
-                        onNavigateToPayment(it, event.montantTotal)
-                    }
+                    onNavigateToPayment(event.adherentId, event.localAdherentId, event.montantTotal)
                 }
                 is AddAdherentUiEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)
+                is AddAdherentUiEvent.NavigateBack -> {
+                    // After a successful edit, go back to details screen
+                    (onNavigateBack ?: onBack).invoke()
+                }
             }
         }
     }
@@ -89,7 +91,7 @@ fun AddAdherentScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             ModernHeader(
-                title = "Nouvel Adhérent",
+                title = if (isEditMode) "Modifier Adhérent" else "Nouvel Adhérent",
                 currentStep = currentStep,
                 totalSteps = steps.size,
                 totalCost = state.totalCost,
@@ -145,13 +147,17 @@ fun AddAdherentScreen(
                 currentStep = currentStep,
                 totalSteps = steps.size,
                 isLoading = state.isLoading,
+                isEditMode = isEditMode,
                 onPrevious = { if (currentStep > 0) currentStep-- },
                 onNext = {
                     if (viewModel.validateStep(currentStep)) {
                         if (currentStep < steps.size - 1) currentStep++
                     }
                 },
-                onSubmit = { viewModel.submitWithUpload(context, agentId) },
+                onSubmit = {
+                    if (isEditMode) viewModel.submitEdit(context)
+                    else viewModel.submitWithUpload(context, agentId)
+                },
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
 
@@ -617,11 +623,13 @@ fun SimpleNavigation(
     currentStep: Int,
     totalSteps: Int,
     isLoading: Boolean,
+    isEditMode: Boolean = false,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onSubmit: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isLastStep = currentStep == totalSteps - 1
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         if (currentStep > 0) {
             OutlinedButton(
@@ -636,7 +644,7 @@ fun SimpleNavigation(
         }
 
         Button(
-            onClick = if (currentStep == totalSteps - 1) onSubmit else onNext,
+            onClick = if (isLastStep) onSubmit else onNext,
             modifier = Modifier.weight(1f).height(50.dp),
             enabled = !isLoading,
             shape = AppShapes.MediumRadius,
@@ -649,7 +657,13 @@ fun SimpleNavigation(
                     strokeWidth = 2.dp
                 )
             } else {
-                Text(if (currentStep == totalSteps - 1) "Enregistrer" else "Suivant")
+                Text(
+                    when {
+                        !isLastStep -> "Suivant"
+                        isEditMode -> "Mettre à jour"
+                        else -> "Enregistrer"
+                    }
+                )
             }
         }
     }

@@ -1,16 +1,13 @@
 package com.example.sencsu
 
-import AppNavigation
+import com.example.sencsu.navigation.AppNavigation
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.RequiresApi
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.platform.LocalContext
-import androidx.navigation.NavController
-import com.example.sencsu.screen.Paiement
+import com.example.sencsu.theme.AppTheme
 
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -22,7 +19,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MaterialTheme{
+            AppTheme {
                 AppNavigation()
             }
         }

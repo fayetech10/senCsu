@@ -1,3 +1,4 @@
+package com.example.sencsu.screen
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -5,7 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Refresh
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.sencsu.components.ModernAdherentRow
+import com.example.sencsu.components.cartes.HealthInsuranceCard
 import com.example.sencsu.data.remote.dto.AdherentDto
 import com.example.sencsu.data.repository.SessionManager
 import com.example.sencsu.domain.viewmodel.ListeAdherentViewModel
@@ -128,7 +130,7 @@ private fun EnhancedTopBar(
         navigationIcon = {
             IconButton(onClick = onNavigateBack) {
                 Icon(
-                    Icons.Rounded.ArrowBack,
+                    Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = "Retour",
                     tint = AppColors.TextMain
                 )

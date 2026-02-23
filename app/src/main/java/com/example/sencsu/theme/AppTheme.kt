@@ -8,44 +8,46 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.example.sencsu.ui.theme.Typography
 
 // ==============================================================================
 // DÉFINITION DES COULEURS
 // ==============================================================================
 
 object AppColors {
-    // Couleurs primaires
-    val BrandBlue = Color(0xFF0052CC)
-    val BrandBlueDark = Color(0xFF003D99)
-    val BrandBlueLite = Color(0xFFE6F0FF)
+    // ── Palette principale CMU (Couverture Maladie Universelle) ──
+    // Vert CMU profond — couleur primaire
+    val BrandBlue = Color(0xFF1B7C3D)          // renommé logiquement → vert CMU
+    val BrandBlueDark = Color(0xFF145C2C)       // vert foncé
+    val BrandBlueLite = Color(0xFFE8F5EC)       // vert très clair (fond chip/avatar)
+
+    // Gris neutres CMU
+    val AppBackground = Color(0xFFF4F6F5)       // fond général gris-vert très clair
+    val SurfaceBackground = Color(0xFFFFFFFF)   // surface blanche
+    val SurfaceAlt = Color(0xFFF0F4F1)          // surface alternative gris-vert
 
     // Couleurs de statut
-    val StatusGreen = Color(0xFF34D399)
-    val StatusGreenDark = Color(0xFF059669)
-    val StatusOrange = Color(0xFFFB923C)
-    val StatusOrangeDark = Color(0xFFDC2626)
-    val StatusRed = Color(0xFFEF4444)
-
-    // Couleurs de fond
-    val AppBackground = Color(0xFFFBFDFF)
-    val SurfaceBackground = Color(0xFFFFFFFF)
-    val SurfaceAlt = Color(0xFFF8FAFC)
+    val StatusGreen = Color(0xFF2ECC71)         // vert vif statut actif
+    val StatusGreenDark = Color(0xFF1A9B50)     // vert foncé texte actif
+    val StatusOrange = Color(0xFFFB923C)        // orange avertissement
+    val StatusOrangeDark = Color(0xFFDC2626)    // rouge foncé
+    val StatusRed = Color(0xFFEF4444)           // rouge erreur
 
     // Couleurs de texte
-    val TextMain = Color(0xFF0F172A)
-    val TextSub = Color(0xFF64748B)
-    val TextDisabled = Color(0xFF94A3B8)
-    val TextMuted = Color(0xFFCBD5E1)
+    val TextMain = Color(0xFF1A2E22)            // presque noir teinté vert
+    val TextSub = Color(0xFF5C7264)             // gris-vert moyen
+    val TextDisabled = Color(0xFF9DB5A3)        // gris-vert clair
+    val TextMuted = Color(0xFFCCDDD3)           // gris très clair
 
     // Couleurs de bordure
-    val BorderColor = Color(0xFFE2E8F0)
-    val BorderColorLight = Color(0xFFF1F5F9)
+    val BorderColor = Color(0xFFD5E6D9)         // vert-gris clair
+    val BorderColorLight = Color(0xFFEBF4EE)    // vert-gris très clair
 
     // Couleurs additionnelles
-    val SuccessLight = Color(0xFFD1FAE5)
-    val WarningLight = Color(0xFFFEF3C7)
-    val DangerLight = Color(0xFFFEE2E2)
-    val InfoLight = Color(0xFFDEBEFF)
+    val SuccessLight = Color(0xFFD1FAE5)        // fond succès
+    val WarningLight = Color(0xFFFEF3C7)        // fond avertissement
+    val DangerLight = Color(0xFFFEE2E2)        // fond danger
+    val InfoLight = Color(0xFFE8F5EC)           // fond info (même ton vert)
 }
 
 // ==============================================================================
@@ -124,16 +126,26 @@ object AppDurations {
 fun AppTheme(content: @Composable () -> Unit) {
     val colorScheme = lightColorScheme(
         primary = AppColors.BrandBlue,
-        secondary = AppColors.StatusGreen,
+        onPrimary = Color.White,
+        secondary = AppColors.StatusGreenDark,
+        onSecondary = Color.White,
         tertiary = AppColors.StatusOrange,
+        onTertiary = Color.White,
         error = AppColors.StatusRed,
+        onError = Color.White,
         background = AppColors.AppBackground,
+        onBackground = AppColors.TextMain,
         surface = AppColors.SurfaceBackground,
+        onSurface = AppColors.TextMain,
+        surfaceVariant = AppColors.SurfaceAlt,
+        onSurfaceVariant = AppColors.TextSub,
         outline = AppColors.BorderColor,
+        outlineVariant = AppColors.BorderColorLight,
     )
 
     MaterialTheme(
         colorScheme = colorScheme,
+        typography = Typography,
         content = content
     )
 }

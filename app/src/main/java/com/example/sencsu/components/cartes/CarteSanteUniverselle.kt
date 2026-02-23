@@ -55,8 +55,8 @@ fun CarteSanteUniverselle(
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xFF1E88E5), // Bleu clair
-                            Color(0xFF0D47A1)  // Bleu foncé
+                            Color(0xFF2E9E57), // Vert CMU clair
+                            Color(0xFF145C2C)  // Vert CMU foncé
                         )
                     )
                 )
@@ -111,7 +111,7 @@ fun CarteSanteUniverselle(
                         ) {
                             Text(
                                 text = "EDIRAMU",
-                                color = Color(0xFF0D47A1),
+                                color = Color(0xFF145C2C),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 1.sp
@@ -163,13 +163,13 @@ fun CarteSanteUniverselle(
                     ) {
                         // Titre en haut
                         Text(
-                            text = "CARTE DE COUVERTURE SANTÉ",
-                            color = Color(0xFF0D47A1),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Black,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                             text = "CARTE DE COUVERTURE SANTÉ",
+                             color = Color(0xFF145C2C),
+                             fontSize = 12.sp,
+                             fontWeight = FontWeight.Black,
+                             textAlign = TextAlign.Center,
+                             modifier = Modifier.fillMaxWidth()
+                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
 
@@ -245,13 +245,13 @@ fun CarteSanteUniverselle(
 
                         // Footer avec l'agence
                         Text(
-                            text = "AGENCE SÉNÉGALAISE DE LA COUVERTURE SANITAIRE UNIVERSELLE",
-                            color = Color(0xFF0D47A1),
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                             text = "AGENCE SÉNÉGALAISE DE LA COUVERTURE SANITAIRE UNIVERSELLE",
+                             color = Color(0xFF145C2C),
+                             fontSize = 8.sp,
+                             fontWeight = FontWeight.Bold,
+                             textAlign = TextAlign.Center,
+                             modifier = Modifier.fillMaxWidth()
+                         )
                     }
                 }
 

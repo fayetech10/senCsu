@@ -3,7 +3,6 @@ package com.example.sencsu.data.remote.dto
 import androidx.compose.ui.graphics.Color
 //import com.google.gson.annotations.SerializedName
 import com.google.gson.annotations.SerializedName
-import java.time.LocalDate
 
 // DTO pour la réponse complète
 data class ApiResponse<T>(
@@ -113,6 +112,27 @@ data class AdherentDto(
     val agent: AgentDto? = null
 )
 
+data class AdherentUpdateDto(
+    val nom: String,
+    val prenoms: String,
+    val adresse: String,
+    val lieuNaissance: String,
+    val sexe: String,
+    val dateNaissance: String, // yyyy-MM-dd
+    val situationMatrimoniale: String,
+    val whatsapp: String,
+    val secteurActivite: String?,
+    val region: String,
+    val departement: String,
+    val commune: String,
+    val photo: String?,
+    val photoRecto: String?,
+    val photoVerso: String?,
+    val personnesCharge: List<PersonneChargeDto>? = null,
+    val typePiece: String,
+    val numeroPiece: String,
+    val numeroCNi: String,
+)
 
 // DTO pour une personne à charge
 data class PersonneChargeDto(

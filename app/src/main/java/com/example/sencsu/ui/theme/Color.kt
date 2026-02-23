@@ -2,14 +2,14 @@ package com.example.sencsu.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
- val SnGreen = Color(0xFF2D7F4F)
- val SnYellow = Color(0xFFFCE181)
- val SnRed = Color(0xFFC41E3A)
- val CardBackground = Color(0xFFFDFDFD)
+// ==========================================
+// Les couleurs principales de l'application
+// sont définies dans theme/AppTheme.kt → AppColors
+// Ce fichier contient uniquement des alias legacy.
+// ==========================================
 
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+// Couleurs SenCSU
+val SnGreen = Color(0xFF34D399)
+val SnYellow = Color(0xFFF3C623)
+val SnRed = Color(0xFFEF4444)
+val CardBackground = Color(0xFFFFFFFF)

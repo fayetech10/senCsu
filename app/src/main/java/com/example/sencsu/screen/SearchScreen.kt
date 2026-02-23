@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -199,7 +200,7 @@ private fun BackButton(onClick: () -> Unit) {
             .border(1.dp, AppColors.BorderColor.copy(alpha = 0.5f), CircleShape)
     ) {
         Icon(
-            Icons.Rounded.ArrowBack,
+            Icons.AutoMirrored.Rounded.ArrowBack,
             contentDescription = "Retour",
             tint = AppColors.TextMain,
             modifier = Modifier.size(20.dp)

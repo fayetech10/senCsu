@@ -44,12 +44,33 @@ class AdherentRepository @Inject constructor(
             }
         }
     }
-    suspend fun addPersonneCharge(adherentId: Long, personne: PersonneChargeDto) {
-
-        apiService.addPersonneCharge(adherentId, personne)
+    suspend fun addPersonneCharge(adherentId: Long, personne: PersonneChargeDto): Result<PersonneChargeDto> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val result = apiService.addPersonneCharge(adherentId, personne)
+                Result.success(result)
+            } catch (e: HttpException) {
+                Result.failure(Exception("Erreur HTTP: ${e.code()} - ${e.message}"))
+            } catch (e: IOException) {
+                Result.failure(Exception("Erreur de connexion: ${e.message}"))
+            } catch (e: Exception) {
+                Result.failure(Exception("Erreur inattendue: ${e.message}"))
+            }
+        }
     }
 
-    suspend fun deletePersonneCharge(id: Long) {
-        apiService.deletePersonneCharge(id)
+    suspend fun deletePersonneCharge(adherentId: Long, pcId: Long): Result<Unit> {
+        return withContext(Dispatchers.IO) {
+            try {
+                apiService.deletePersonneCharge(adherentId, pcId)
+                Result.success(Unit)
+            } catch (e: HttpException) {
+                Result.failure(Exception("Erreur HTTP: ${e.code()} - ${e.message}"))
+            } catch (e: IOException) {
+                Result.failure(Exception("Erreur de connexion: ${e.message}"))
+            } catch (e: Exception) {
+                Result.failure(Exception("Erreur inattendue: ${e.message}"))
+            }
+        }
     }
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -38,6 +39,7 @@ data class PaiementFormState(
     val modePaiement: String = "Virement",
     val montantTotal: Double? = null,
     val adherentId: Long? = null,
+    val localAdherentId: Long? = null,
     val isLoading: Boolean = false,
     val errorMessage: String = "",
     val isSuccess: Boolean = false
@@ -47,6 +49,7 @@ data class PaiementFormState(
 @Composable
 fun Paiement(
     adherentId: Long?,
+    localAdherentId: Long?,
     montantTotal: Double?,
     navController: NavController,
     viewModel: PaiementViewModel = hiltViewModel()
@@ -58,13 +61,11 @@ fun Paiement(
     }
 
     // Initialize form data
-    LaunchedEffect(adherentId, montantTotal) {
-        viewModel.initializeFormData(adherentId, montantTotal)
+    LaunchedEffect(adherentId, localAdherentId, montantTotal) {
+        viewModel.initializeFormData(adherentId, localAdherentId, montantTotal)
     }
-    LaunchedEffect(adherentId) {
-        adherentId?.let {
-            viewModel.loadAdherent(it)
-        }
+    LaunchedEffect(adherentId, localAdherentId) {
+        viewModel.loadAdherent(adherentId, localAdherentId)
     }
 
     // Redirect after success
@@ -109,7 +110,7 @@ fun Paiement(
                 },
                 navigationIcon = {
                      IconButton(onClick = { navController.popBackStack() }) {
-                         Icon(Icons.Rounded.ArrowBack, contentDescription = "Retour", tint = AppColors.TextMain)
+                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Retour", tint = AppColors.TextMain)
                      }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(

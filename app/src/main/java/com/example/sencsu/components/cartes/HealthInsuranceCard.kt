@@ -1,3 +1,5 @@
+package com.example.sencsu.components.cartes
+
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.util.Size

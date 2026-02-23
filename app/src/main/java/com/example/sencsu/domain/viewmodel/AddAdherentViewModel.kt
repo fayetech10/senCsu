@@ -2,16 +2,23 @@ package com.example.sencsu.domain.viewmodel
 
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.sencsu.data.local.dao.AdherentDao
+import com.example.sencsu.data.local.entity.AdherentEntity
 import com.example.sencsu.data.remote.dto.AdherentDto
+import com.example.sencsu.data.remote.dto.AdherentUpdateDto
 import com.example.sencsu.data.remote.dto.FormConstants
 import com.example.sencsu.data.remote.dto.PersonneChargeDto
+import com.example.sencsu.data.repository.AdherentRepository
 import com.example.sencsu.data.repository.DashboardRepository
 import com.example.sencsu.data.repository.FileRepository
 import com.example.sencsu.utils.Formatters
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.util.UUID
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +28,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 import java.io.IOException
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 private const val ADHERENT_PRICE = 4500
@@ -28,13 +36,16 @@ private const val DEPENDANT_PRICE = 3500
 
 sealed class AddAdherentUiEvent {
     data class ShowSnackbar(val message: String) : AddAdherentUiEvent()
-    data class NavigateToPayment(val adherentId: Long?, val montantTotal: Int) : AddAdherentUiEvent()
+    data class NavigateToPayment(val adherentId: Long?, val localAdherentId: Long?, val montantTotal: Int) : AddAdherentUiEvent()
+    object NavigateBack : AddAdherentUiEvent()
 }
 
 @HiltViewModel
 class AddAdherentViewModel @Inject constructor(
     private val adherentRepository: DashboardRepository,
     private val fileRepository: FileRepository,
+    private val adherentDao: AdherentDao,
+    private val adherentRepo: AdherentRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AddAdherentUiState())
@@ -42,6 +53,55 @@ class AddAdherentViewModel @Inject constructor(
 
     private val _uiEvent = Channel<AddAdherentUiEvent>()
     val uiEvent = _uiEvent.receiveAsFlow()
+
+    // ── Edit mode support ──────────────────────────────────────────────
+    var isEditMode: Boolean = false
+        private set
+    var editAdherentId: Long? = null
+        private set
+
+    /** Fetches an adherent from the API by ID, then pre-fills the form for editing. */
+    fun fetchAndLoadForEdit(id: Long) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            adherentRepo.getAdherentById(id)
+                .onSuccess { adherent -> loadAdherentForEdit(adherent) }
+                .onFailure { e ->
+                    _uiEvent.send(AddAdherentUiEvent.ShowSnackbar("Impossible de charger l'adhérent: ${e.message}"))
+                }
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+
+    /** Pre-fills the form with an existing adherent's data for editing. */
+    fun loadAdherentForEdit(adherent: AdherentDto) {
+        isEditMode = true
+        editAdherentId = adherent.id
+        _uiState.update {
+            it.copy(
+                prenoms = adherent.prenoms ?: "",
+                nom = adherent.nom ?: "",
+                adresse = adherent.adresse ?: "",
+                lieuNaissance = adherent.lieuNaissance ?: "",
+                sexe = adherent.sexe ?: "M",
+                dateNaissance = adherent.dateNaissance ?: "",
+                situationMatrimoniale = adherent.situationM ?: "",
+                whatsapp = adherent.whatsapp ?: "",
+                secteurActivite = adherent.secteurActivite ?: "",
+                typePiece = adherent.typePiece ?: "CNI",
+                numeroCNI = adherent.numeroCNi ?: "",
+                departement = adherent.departement ?: "",
+                commune = adherent.commune ?: "",
+                // Keep existing server photo filenames (not local URIs)
+                existingPhotoUrl = adherent.photo,
+                existingRectoUrl = adherent.photoRecto,
+                existingVersoUrl = adherent.photoVerso,
+                // Pre-load dependants
+                dependants = adherent.personnesCharge,
+                totalCost = calculateTotalCost(adherent.personnesCharge.size)
+            )
+        }
+    }
 
     // --- Mises à jour des champs Adhérent avec nettoyage d'erreurs ---
     fun updatePrenoms(value: String) = _uiState.update { it.copy(prenoms = value, validationErrors = it.validationErrors - "prenoms") }
@@ -89,35 +149,158 @@ class AddAdherentViewModel @Inject constructor(
 
             try {
                 val state = _uiState.value
+                val total = calculateTotalCost(state.dependants.size)
 
-                // 1. Upload images Adhérent Principal
-                val photoUrl = state.photoUri?.let { fileRepository.uploadImage(context, it).getOrThrow() }
-                val rectoUrl = state.rectoUri?.let { fileRepository.uploadImage(context, it).getOrThrow() }
-                val versoUrl = state.versoUri?.let { fileRepository.uploadImage(context, it).getOrThrow() }
+                val numeroPieceFinale = if (state.typePiece == "CNI") state.numeroCNI else state.numeroExtrait
 
-                // 2. Upload images Dépendants en parallèle
+                // 1. Sauvegarde locale dans Room (Offline-First)
+                val localUuid = UUID.randomUUID().toString()
+                val entity = AdherentEntity(
+                    prenoms = state.prenoms,
+                    nom = state.nom,
+                    adresse = state.adresse,
+                    lieuNaissance = state.lieuNaissance,
+                    sexe = state.sexe,
+                    dateNaissance = Formatters.formatDateForApi(state.dateNaissance),
+                    situationM = state.situationMatrimoniale,
+                    whatsapp = state.whatsapp,
+                    secteurActivite = state.secteurActivite,
+                    typePiece = state.typePiece,
+                    numeroPiece = numeroPieceFinale,
+                    numeroCNi = numeroPieceFinale,
+                    departement = state.departement,
+                    commune = state.commune,
+                    region = "Thiès",
+                    typeAdhesion = "Familiale",
+                    montantTotal = total.toDouble(),
+                    regime = "Contributif",
+                    photo = state.photoUri?.toString(),
+                    photoRecto = state.rectoUri?.toString(),
+                    photoVerso = state.versoUri?.toString(),
+                    actif = true,
+                    isSynced = false,
+                    localUuid = localUuid
+                )
+                val localId = adherentDao.insertAdherent(entity)
+
+                // 2. Tentative de synchronisation API
+                try {
+                    val photoUrl = state.photoUri?.let { fileRepository.uploadImage(context, it).getOrThrow() }
+                    val rectoUrl = state.rectoUri?.let { fileRepository.uploadImage(context, it).getOrThrow() }
+                    val versoUrl = state.versoUri?.let { fileRepository.uploadImage(context, it).getOrThrow() }
+
+                    val updatedDeps = uploadDependantsImages(context)
+
+                    val adherentDto = getFormData(
+                        photoUrl = photoUrl,
+                        rectoUrl = rectoUrl,
+                        versoUrl = versoUrl,
+                        updatedDependants = updatedDeps,
+                        clientUUID = localUuid
+                    )
+
+                    adherentRepository.ajouterAdherent(agentId, adherentDto)
+                        .onSuccess { idResponse ->
+                            adherentDao.markAsSynced(localId, idResponse.adherentId)
+                            _uiEvent.send(AddAdherentUiEvent.ShowSnackbar("Adhérent ajouté avec succès !"))
+                            _uiEvent.send(AddAdherentUiEvent.NavigateToPayment(idResponse.adherentId, localId, total))
+                            resetForm()
+                        }
+                        .onFailure { throw it }
+
+                } catch (e: HttpException) {
+                    // Erreur API (ex: 400 Bad Request pour validation refusée)
+                    Log.e("SubmitError", "Erreur API : ${e.code()}", e)
+                    // Supprimer le brouillon local puisqu'il est invalide pour le backend
+                    adherentDao.deleteByLocalId(localId)
+                    
+                    val errorBody = try {
+                        e.response()?.errorBody()?.string()
+                    } catch (ex: Exception) {
+                        null
+                    }
+                    val message = errorBody ?: "Erreur serveur (${e.code()})"
+                    _uiEvent.send(AddAdherentUiEvent.ShowSnackbar(message))
+                    
+                } catch (e: IOException) {
+                    // Gestion du mode hors ligne si échec réseau (pas d'internet)
+                    Log.e("SubmitError", "Erreur réseau, mode hors ligne activé", e)
+                    _uiEvent.send(AddAdherentUiEvent.ShowSnackbar("Enregistré localement (hors ligne)"))
+                    _uiEvent.send(AddAdherentUiEvent.NavigateToPayment(null, localId, total))
+                    resetForm()
+                } catch (e: Exception) {
+                    Log.e("SubmitError", "Erreur inattendue", e)
+                    adherentDao.deleteByLocalId(localId)
+                    _uiEvent.send(AddAdherentUiEvent.ShowSnackbar(e.message ?: "Erreur inattendue"))
+                }
+            } finally {
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+
+    /** Submit in EDIT mode – calls PUT endpoint */
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun submitEdit(context: Context) {
+        val id = editAdherentId ?: return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                val state = _uiState.value
+                val numeroPieceFinale = if (state.typePiece == "CNI") state.numeroCNI else state.numeroExtrait
+
+                // Upload new photos only if user picked a new local file
+                val photoUrl = if (state.photoUri != null)
+                    fileRepository.uploadImage(context, state.photoUri).getOrNull()
+                else state.existingPhotoUrl
+
+                val rectoUrl = if (state.rectoUri != null)
+                    fileRepository.uploadImage(context, state.rectoUri).getOrNull()
+                else state.existingRectoUrl
+
+                val versoUrl = if (state.versoUri != null)
+                    fileRepository.uploadImage(context, state.versoUri).getOrNull()
+                else state.existingVersoUrl
+
                 val updatedDeps = uploadDependantsImages(context)
 
-                // 3. Préparation de l'objet DTO final
-                val adherentDto = getFormData(
-                    photoUrl = photoUrl,
-                    rectoUrl = rectoUrl,
-                    versoUrl = versoUrl,
-                    updatedDependants = updatedDeps
+                val dto = AdherentUpdateDto(
+
+                    nom = state.nom,
+                    prenoms = state.prenoms,
+                    adresse = state.adresse,
+                    lieuNaissance = state.lieuNaissance,
+                    sexe = state.sexe,
+                    dateNaissance = Formatters.formatDateForAPI(state.dateNaissance),
+                    situationMatrimoniale = state.situationMatrimoniale,
+                    whatsapp = state.whatsapp,
+                    secteurActivite = state.secteurActivite,
+                    region = "Thiès",
+                    departement = state.departement,
+                    commune = state.commune,
+                    photo = photoUrl,
+                    photoRecto = rectoUrl,
+                    photoVerso = versoUrl,
+                    personnesCharge = updatedDeps,
+                    typePiece = state.typePiece,
+                    numeroPiece = numeroPieceFinale,
+                    numeroCNi = numeroPieceFinale,
+
                 )
 
-                // 4. Envoi au serveur
-                adherentRepository.ajouterAdherent(agentId, adherentDto)
-                    .onSuccess { idResponse ->
-                        val total = calculateTotalCost(state.dependants.size)
-                        _uiEvent.send(AddAdherentUiEvent.ShowSnackbar("Adhérent ajouté avec succès !"))
-                        _uiEvent.send(AddAdherentUiEvent.NavigateToPayment(idResponse.adherentId, total))
+                adherentRepository.updateAdherent(id, dto)
+                    .onSuccess {
+                        _uiEvent.send(AddAdherentUiEvent.ShowSnackbar("Adhérent mis à jour avec succès !"))
+                        _uiEvent.send(AddAdherentUiEvent.NavigateBack)
                         resetForm()
                     }
-                    .onFailure { throw it }
-
+                    .onFailure { e ->
+                        Log.e("SubmitEdit", "Erreur mise à jour", e)
+                        _uiEvent.send(AddAdherentUiEvent.ShowSnackbar(e.message ?: "Erreur lors de la mise à jour"))
+                    }
             } catch (e: Exception) {
-                Log.e("SubmitError", "Erreur lors de la soumission", e)
+                Log.e("SubmitEdit", "Erreur inattendue", e)
                 sendError(e)
             } finally {
                 _uiState.update { it.copy(isLoading = false) }
@@ -145,7 +328,8 @@ class AddAdherentViewModel @Inject constructor(
         photoUrl: String?,
         rectoUrl: String?,
         versoUrl: String?,
-        updatedDependants: List<PersonneChargeDto>
+        updatedDependants: List<PersonneChargeDto>,
+        clientUUID: String
     ): AdherentDto {
         val state = _uiState.value
         val numeroPieceFinale = if (state.typePiece == "CNI") state.numeroCNI else state.numeroExtrait
@@ -172,7 +356,7 @@ class AddAdherentViewModel @Inject constructor(
             photo = photoUrl,
             photoRecto = rectoUrl,
             photoVerso = versoUrl,
-            clientUUID = "${System.currentTimeMillis()}-${(0..1000).random()}",
+            clientUUID = clientUUID,
             personnesCharge = updatedDependants.map { dep ->
                 dep.copy(
                     dateNaissance = if (!dep.dateNaissance.isNullOrBlank()) {

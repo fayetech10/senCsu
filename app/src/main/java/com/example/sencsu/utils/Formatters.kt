@@ -2,6 +2,7 @@ package com.example.sencsu.utils
 
 import android.annotation.TargetApi
 import android.os.Build
+import androidx.annotation.RequiresApi
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.LocalDate
@@ -29,6 +30,14 @@ object Formatters {
         val outputFormatter = DateTimeFormatter.ISO_LOCAL_DATE // yyyy-MM-dd
 
         val localDate = LocalDate.parse(dateUi, inputFormatter)
+        return localDate.format(outputFormatter)
+    }
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun formatDateKot(date: String): String {
+        val inputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+        val outputFormatter = DateTimeFormatter.ISO_LOCAL_DATE // yyyy-MM-dd
+
+        val localDate = LocalDate.parse(date, inputFormatter)
         return localDate.format(outputFormatter)
     }
     fun formatPhoneNumber(number: String): String {

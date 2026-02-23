@@ -1,4 +1,4 @@
-package com.example.healthcard.ui.components
+package com.example.sencsu.components.cartes
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween

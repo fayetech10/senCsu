@@ -24,7 +24,11 @@ class SessionManager @Inject constructor(
     }
 
     // Événement pour notifier la déconnexion
-    private val _logoutEvent = MutableSharedFlow<Unit>(replay = 0)
+    private val _logoutEvent = MutableSharedFlow<Unit>(
+        replay = 0,
+        extraBufferCapacity = 1,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+    )
     val logoutEvent: SharedFlow<Unit> = _logoutEvent.asSharedFlow()
 
     // Flow pour le token d'authentification
@@ -120,7 +124,7 @@ class SessionManager @Inject constructor(
      */
     suspend fun clearSessionAndNotify() {
         clear()
-        _logoutEvent.emit(Unit)
+        _logoutEvent.tryEmit(Unit)
     }
 
     /**

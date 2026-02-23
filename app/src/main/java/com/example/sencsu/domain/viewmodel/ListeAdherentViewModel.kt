@@ -26,8 +26,9 @@ data class ListeAdherentState(
                 return adherents
             }
             return adherents.filter {
-                it.prenoms!!.contains(searchQuery, ignoreCase = true) ||
-                        it.nom!!.contains(searchQuery, ignoreCase = true) ||
+                // Éviter les NullPointerException en utilisant ?. et ?:
+                it.prenoms?.contains(searchQuery, ignoreCase = true) == true ||
+                        it.nom?.contains(searchQuery, ignoreCase = true) == true ||
                         it.numeroCNi?.contains(searchQuery, ignoreCase = true) == true
             }
         }
@@ -36,7 +37,7 @@ data class ListeAdherentState(
 @HiltViewModel
 class ListeAdherentViewModel @Inject constructor(
     private val repository: DashboardRepository,
-     val sessionManager: SessionManager
+    val sessionManager: SessionManager
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ListeAdherentState())

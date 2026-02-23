@@ -8,6 +8,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -59,15 +60,25 @@ interface ApiService {
         @Path("id") id: Long
     ) : Response<Unit>
 
-    @DELETE("/api/personnes-charge/{id}")
-    suspend fun deletePersonneCharge(
-        @Path("id") id: Long
-    )
-
+    // Ajouter une personne en charge
     @POST("/api/adherents/{adherentId}/personnes-charge")
     suspend fun addPersonneCharge(
         @Path("adherentId") adherentId: Long,
         @Body personne: PersonneChargeDto
+    ): PersonneChargeDto
+
+    // Supprimer une personne en charge (avec adherentId)
+    @DELETE("/api/adherents/{adherentId}/personnes-charge/{pcId}")
+    suspend fun deletePersonneCharge(
+        @Path("adherentId") adherentId: Long,
+        @Path("pcId") pcId: Long
     )
+
+    @PUT("/api/adherents/{id}")
+    suspend fun updateAdherent(
+        @Path("id") id: Long,
+        @Body adherent: AdherentUpdateDto
+    ): ApiResponse<AdherentUpdateDto>
+
 
 }

@@ -1,6 +1,6 @@
 package com.example.sencsu.screen
 
-import HealthInsuranceCard
+import com.example.sencsu.components.cartes.HealthInsuranceCard
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -56,8 +56,8 @@ import java.time.temporal.ChronoUnit
 fun AdherentDetailsScreen(
     viewModel: AdherentDetailsViewModel = hiltViewModel(),
     viewModelP: AddAdherentViewModel = hiltViewModel(),
-    sessionManager: SessionManager,
     onNavigateBack: () -> Unit,
+    onNavigateToEdit: (Long) -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -139,9 +139,16 @@ fun AdherentDetailsScreen(
                 onDismissRequest = { showAddPersonneModal = false },
                 properties = DialogProperties(usePlatformDefaultWidth = false)
             ) {
+                val context = LocalContext.current
                 AddPersonneChargeModal(
                     viewModel = viewModelP,
-                    onSave = { viewModelP.saveDependant() },
+                    onSave = {
+                        // Copier les données du formulaire vers le ViewModel détails
+                        val formData = viewModelP.uiState.value.currentDependant
+                        viewModel.onNewPersonneChange(formData)
+                        viewModel.onSaveNewPersonne(context)
+                        showAddPersonneModal = false
+                    },
                     onCancel = { showAddPersonneModal = false }
                 )
             }
@@ -219,7 +226,7 @@ fun AdherentDetailsScreen(
                             text = { Text("Modifier l'adhérent", color = AppColors.TextMain) },
                             onClick = {
                                 showMenu = false
-                                // TODO: Naviguer vers l'écran de modification
+                                state.adherent?.id?.let { onNavigateToEdit(it) }
                             },
                             leadingIcon = { Icon(Icons.Rounded.Edit, null, tint = AppColors.TextMain) }
                         )

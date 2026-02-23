@@ -9,6 +9,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.sencsu.data.local.dao.AdherentDao
+import com.example.sencsu.data.local.dao.PaiementDao
+import com.example.sencsu.data.local.entity.PaiementEntity
 import com.example.sencsu.data.remote.dto.PaiementDto
 import com.example.sencsu.data.repository.AdherentRepository
 import com.example.sencsu.data.repository.FileRepository
@@ -29,9 +32,10 @@ class PaiementViewModel @Inject constructor(
     private val paiementRepository: PaiementRepository,
     private val adherentRepository: AdherentRepository,
     private val fileRepository: FileRepository,
+    private val paiementDao: PaiementDao,
+    private val adherentDao: AdherentDao,
     application: Application
-
-    ) : ViewModel() {
+) : ViewModel() {
     private val context: Context = application.applicationContext
 
 
@@ -40,12 +44,11 @@ class PaiementViewModel @Inject constructor(
 
     /* ---------------------- FORM UPDATES ---------------------- */
 
-    fun initializeFormData(adherentId: Long?, montantTotal: Double?) {
+    fun initializeFormData(adherentId: Long?, localAdherentId: Long?, montantTotal: Double?) {
         uiState = uiState.copy(
             adherentId = adherentId,
+            localAdherentId = localAdherentId,
             montantTotal = montantTotal
-
-
         )
     }
 
@@ -63,29 +66,33 @@ class PaiementViewModel @Inject constructor(
 
     /* ---------------------- ADD PAYMENT ---------------------- */
 
-    fun loadAdherent(adherentId: Long) {
+    fun loadAdherent(adherentId: Long?, localAdherentId: Long?) {
         viewModelScope.launch {
-            adherentRepository.getAdherentById(adherentId)
-                .onSuccess { adherent ->
+            if (adherentId != null) {
+                adherentRepository.getAdherentById(adherentId)
+                    .onSuccess { adherent ->
+                        uiState = uiState.copy(
+                            adherentId = adherent.id,
+                            montantTotal = adherent.montantTotal
+                        )
+                    }
+            } else if (localAdherentId != null) {
+                val localAdherent = adherentDao.getAdherentById(localAdherentId)
+                if (localAdherent != null) {
                     uiState = uiState.copy(
-                        adherentId = adherent.id,
-                        montantTotal = adherent.montantTotal
+                        localAdherentId = localAdherent.localId,
+                        montantTotal = localAdherent.montantTotal
                     )
                 }
-                .onFailure {
-                    uiState = uiState.copy(
-                        errorMessage = "Impossible de charger l’adhérent"
-                    )
-                }
+            }
         }
     }
 
 
-    // Ajoutez le paramètre Context à la fonction
     fun addPaiement() {
         viewModelScope.launch {
             try {
-                // 1. Vérification si la photo est présente
+                // 1. Vérification
                 if (uiState.photoPaiement == null) {
                     uiState = uiState.copy(errorMessage = "Veuillez ajouter la photo du reçu")
                     return@launch
@@ -93,37 +100,68 @@ class PaiementViewModel @Inject constructor(
 
                 uiState = uiState.copy(isLoading = true, errorMessage = "")
 
-                // 2. Upload de l'image pour obtenir l'URL
-                // On utilise la même méthode que pour l'adhérent
-                val uploadResult = fileRepository.uploadImage(context, uiState.photoPaiement!!)
-
-                val photoUrl = uploadResult.getOrThrow() // Récupère l'URL ou lance une exception
-
-                // 3. Création du DTO avec l'URL récupérée
-                val paiement = PaiementDto(
-                    adherentId = uiState.adherentId!!,
+                // 2. Offline-First: Sauvegarde dans Room
+                val entity = PaiementEntity(
                     reference = uiState.reference,
-                    montant = uiState.montantTotal!!,
+                    montant = uiState.montantTotal ?: 0.0,
                     modePaiement = uiState.modePaiement,
-                    photoPaiement = photoUrl // Ici on envoie l'URL (String)
+                    photoPaiement = uiState.photoPaiement?.toString(),
+                    adherentId = uiState.adherentId,
+                    localAdherentId = uiState.localAdherentId,
+                    isSynced = false
                 )
+                val localId = paiementDao.insertPaiement(entity)
 
-                // 4. Envoi au serveur
-                paiementRepository.addPaiement(paiement)
-                    .onSuccess {
+                // 3. Tentative d'envoi API
+                try {
+                    val uploadResult = fileRepository.uploadImage(context, uiState.photoPaiement!!)
+                    val photoUrl = uploadResult.getOrThrow()
+
+                    // S'assurer qu'on a un adherentId distant avant d'envoyer
+                    // Si on n'a que le local, la synchro auto s'en chargera plus tard
+                    if (uiState.adherentId != null) {
+                        val paiement = PaiementDto(
+                            adherentId = uiState.adherentId!!,
+                            reference = uiState.reference,
+                            montant = uiState.montantTotal!!,
+                            modePaiement = uiState.modePaiement,
+                            photoPaiement = photoUrl,
+                            photos = listOf(photoUrl)
+                        )
+
+                        paiementRepository.addPaiement(paiement)
+                            .onSuccess {
+                                paiementDao.markAsSynced(localId, localId) // Sync successful
+                                uiState = uiState.copy(
+                                    isLoading = false,
+                                    isSuccess = true,
+                                    errorMessage = ""
+                                )
+                            }
+                            .onFailure { e -> throw e }
+                    } else {
+                        // Enregistrement hors ligne car pas encore d'ID distant
                         uiState = uiState.copy(
                             isLoading = false,
-                            isSuccess = true,
+                            isSuccess = true, // Success locally
                             errorMessage = ""
                         )
                     }
-                    .onFailure { e -> throw e }
 
+                } catch (e: Exception) {
+                    // Si pas d'internet ou erreur API, success quand même en local
+                    Log.e(TAG, "Erreur réseau, paiement conservé localement", e)
+                    uiState = uiState.copy(
+                        isLoading = false,
+                        isSuccess = true,
+                        errorMessage = ""
+                    )
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "Erreur lors du paiement", e)
+                Log.e(TAG, "Erreur inattendue", e)
                 uiState = uiState.copy(
                     isLoading = false,
-                    errorMessage = e.message ?: "Erreur lors de l'enregistrement",
+                    errorMessage = e.message ?: "Erreur inattendue lors de l'enregistrement",
                     isSuccess = false
                 )
             }
