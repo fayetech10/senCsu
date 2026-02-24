@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.kapt)
     alias(libs.plugins.dagger.hilt.android)
+    kotlin("plugin.serialization") version "1.9.22" // Utilise la version de ton Kotlin
 }
 
 android {
@@ -105,6 +106,7 @@ dependencies {
     implementation("com.google.mlkit:segmentation-selfie:16.0.0-beta4")
     dependencies {
         implementation("com.google.zxing:core:3.5.2")
+        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     }
 
 }

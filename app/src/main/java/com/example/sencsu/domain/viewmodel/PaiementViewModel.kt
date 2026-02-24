@@ -13,6 +13,7 @@ import com.example.sencsu.data.local.dao.AdherentDao
 import com.example.sencsu.data.local.dao.PaiementDao
 import com.example.sencsu.data.local.entity.PaiementEntity
 import com.example.sencsu.data.remote.dto.PaiementDto
+import com.example.sencsu.data.remote.dto.ValidationException
 import com.example.sencsu.data.repository.AdherentRepository
 import com.example.sencsu.data.repository.FileRepository
 import com.example.sencsu.data.repository.PaiementRepository
@@ -92,7 +93,7 @@ class PaiementViewModel @Inject constructor(
     fun addPaiement() {
         viewModelScope.launch {
             try {
-                // 1. Vérification
+                // 1. Validation de l'UI
                 if (uiState.photoPaiement == null) {
                     uiState = uiState.copy(errorMessage = "Veuillez ajouter la photo du reçu")
                     return@launch
@@ -100,7 +101,7 @@ class PaiementViewModel @Inject constructor(
 
                 uiState = uiState.copy(isLoading = true, errorMessage = "")
 
-                // 2. Offline-First: Sauvegarde dans Room
+                // 2. Offline-First: Sauvegarde immédiate dans Room
                 val entity = PaiementEntity(
                     reference = uiState.reference,
                     montant = uiState.montantTotal ?: 0.0,
@@ -114,13 +115,12 @@ class PaiementViewModel @Inject constructor(
 
                 // 3. Tentative d'envoi API
                 try {
+                    // Upload de l'image
                     val uploadResult = fileRepository.uploadImage(context, uiState.photoPaiement!!)
                     val photoUrl = uploadResult.getOrThrow()
 
-                    // S'assurer qu'on a un adherentId distant avant d'envoyer
-                    // Si on n'a que le local, la synchro auto s'en chargera plus tard
                     if (uiState.adherentId != null) {
-                        val paiement = PaiementDto(
+                        val paiementDto = PaiementDto(
                             adherentId = uiState.adherentId!!,
                             reference = uiState.reference,
                             montant = uiState.montantTotal!!,
@@ -129,45 +129,62 @@ class PaiementViewModel @Inject constructor(
                             photos = listOf(photoUrl)
                         )
 
-                        paiementRepository.addPaiement(paiement)
+                        // Appel du repository
+                        paiementRepository.addPaiement(paiementDto)
                             .onSuccess {
-                                paiementDao.markAsSynced(localId, localId) // Sync successful
-                                uiState = uiState.copy(
-                                    isLoading = false,
-                                    isSuccess = true,
-                                    errorMessage = ""
-                                )
+                                Log.d(TAG, "Paiement ajouté avec succès")
+                                // Synchronisation réussie
+                                paiementDao.markAsSynced(localId, localId)
+                                uiState = uiState.copy(isLoading = false, isSuccess = true)
                             }
-                            .onFailure { e -> throw e }
+                            .onFailure { exception ->
+                                Log.e(TAG, "Erreur lors de l'ajout: ${exception.message}", exception)
+
+                                // SI ERREUR DE VALIDATION (ex: Référence déjà utilisée)
+                                if (exception is ValidationException) {
+                                    // On supprime de Room car la donnée est invalide
+                                    // et ne pourra JAMAIS être synchronisée
+                                    paiementDao.clearAll()
+
+                                    uiState = uiState.copy(
+                                        isLoading = false,
+                                        isSuccess = false,
+                                        errorMessage = exception.message
+                                            ?: "Erreur de validation du serveur"
+                                    )
+                                } else {
+                                    // Autre erreur (500, Timeout, etc)
+                                    // On laisse en local pour synchro ultérieure
+                                    throw exception
+                                }
+                            }
                     } else {
-                        // Enregistrement hors ligne car pas encore d'ID distant
-                        uiState = uiState.copy(
-                            isLoading = false,
-                            isSuccess = true, // Success locally
-                            errorMessage = ""
-                        )
+                        // Pas d'ID distant, on reste en succès local
+                        uiState = uiState.copy(isLoading = false, isSuccess = true)
                     }
 
                 } catch (e: Exception) {
-                    // Si pas d'internet ou erreur API, success quand même en local
-                    Log.e(TAG, "Erreur réseau, paiement conservé localement", e)
+                    // 4. Gestion du mode Hors-ligne
+                    // (Erreur réseau, timeout, ou erreur non-validation)
+                    Log.w(TAG, "Mode offline activé: ${e.message}", e)
+
                     uiState = uiState.copy(
                         isLoading = false,
-                        isSuccess = true,
-                        errorMessage = ""
+                        isSuccess = true, // L'utilisateur voit "Succès"
+                        errorMessage = "" // Synchro en tâche de fond
                     )
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Erreur inattendue", e)
+                // Erreurs critiques inattendues
+                Log.e(TAG, "Erreur critique", e)
                 uiState = uiState.copy(
                     isLoading = false,
-                    errorMessage = e.message ?: "Erreur inattendue lors de l'enregistrement",
+                    errorMessage = e.message ?: "Erreur inattendue",
                     isSuccess = false
                 )
             }
         }
     }
-
     /* ---------------------- OCR ---------------------- */
 
     fun processImage(

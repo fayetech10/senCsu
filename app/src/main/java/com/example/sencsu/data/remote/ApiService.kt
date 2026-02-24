@@ -43,7 +43,7 @@ interface ApiService {
     @POST("/api/paiements/add")
     suspend fun addPaiement(
         @Body paiement: PaiementDto
-    ): Response<Unit>
+    ): Response<ApiResponseP>
 
     @GET("/api/adherents/{id}")
     suspend fun getAdherentById(

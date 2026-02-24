@@ -3,6 +3,8 @@ package com.example.sencsu.data.remote.dto
 import androidx.compose.ui.graphics.Color
 //import com.google.gson.annotations.SerializedName
 import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 // DTO pour la réponse complète
 data class ApiResponse<T>(
@@ -159,7 +161,43 @@ data class PersonneChargeDto(
 )
 
 
+// Une exception spécifique pour les erreurs 400 (Validation Backend)
 
+
+@Serializable
+data class ApiResponseP(
+    val success: Boolean = true,
+    val message: String = "",
+    val data: String? = null
+)
+
+/**
+ * Structure pour parser les erreurs du backend
+ * S'adapte aux formats courants : {"message": "..."} ou {"error": "..."}
+ */
+@Serializable
+data class ErrorResponse(
+    @SerialName("message")
+    val message: String? = null,
+
+    @SerialName("error")
+    val error: String? = null,
+
+    @SerialName("errors")
+    val errors: List<String>? = null
+) {
+    fun getErrorMessage(): String {
+        return message
+            ?: error
+            ?: errors?.joinToString(", ")
+            ?: "Erreur inconnue"
+    }
+}
+
+/**
+ * Exception spécifique pour les erreurs de validation (400)
+ */
+class ValidationException(message: String) : Exception(message)
 // DTO pour l'agent
 data class AgentDto(
     val id: Long? = null,
