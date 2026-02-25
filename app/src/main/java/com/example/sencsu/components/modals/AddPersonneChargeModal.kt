@@ -285,8 +285,6 @@ private fun FormSection(title: String, content: @Composable ColumnScope.() -> Un
 
 @Composable
 private fun MiniImagePicker(label: String, uri: String?, onPick: (Any?) -> Unit) {
-    // Wrapper autour de ton ImagePickerComponent pour l'adapter à la grille
-    // On suppose que ImagePickerComponent gère l'affichage compact si on le contraint
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         ImagePickerComponent(
             label = "", // On cache le label interne pour utiliser le nôtre

@@ -1,5 +1,7 @@
 package com.example.sencsu.components
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -47,8 +49,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-
-
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun AddAdherentScreen(
@@ -56,7 +57,7 @@ fun AddAdherentScreen(
     onNavigateToPayment: (adherentId: Long?, localAdherentId: Long?, montantTotal: Int) -> Unit,
     agentId: Long?,
     viewModel: AddAdherentViewModel = hiltViewModel(),
-    onNavigateBack: (() -> Unit)? = null,  // Used after successful edit
+    onNavigateBack: (() -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -79,7 +80,6 @@ fun AddAdherentScreen(
                 }
                 is AddAdherentUiEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)
                 is AddAdherentUiEvent.NavigateBack -> {
-                    // After a successful edit, go back to details screen
                     (onNavigateBack ?: onBack).invoke()
                 }
             }
@@ -106,14 +106,12 @@ fun AddAdherentScreen(
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
         ) {
-            // Barre de progression discrète
             StepProgressBar(
                 totalSteps = steps.size,
                 currentStep = currentStep,
                 modifier = Modifier.padding(20.dp)
             )
 
-            // Contenu du formulaire
             AnimatedContent(
                 targetState = currentStep,
                 transitionSpec = { fadeIn() with fadeOut() },
@@ -141,8 +139,6 @@ fun AddAdherentScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Navigation
-            // Navigation
             SimpleNavigation(
                 currentStep = currentStep,
                 totalSteps = steps.size,
@@ -164,22 +160,16 @@ fun AddAdherentScreen(
             Spacer(modifier = Modifier.height(40.dp))
         }
 
-        // Modals & Dialogs
+        // Modal pour ajouter/modifier un dépendant
         if (state.isModalVisible) {
-
-            val sheetState = rememberModalBottomSheetState(
-                skipPartiallyExpanded = true
-            )
+            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
             ModalBottomSheet(
                 sheetState = sheetState,
                 onDismissRequest = { viewModel.hideModal() },
                 containerColor = Color.White
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                ) {
+                Box(modifier = Modifier.fillMaxSize()) {
                     AddDependantModalContent(
                         viewModel = viewModel,
                         onSave = { viewModel.saveDependant() },
@@ -189,7 +179,7 @@ fun AddAdherentScreen(
             }
         }
 
-
+        // Dialog de confirmation suppression
         if (showAlertDialog) {
             SimpleAlertDialog(
                 title = alertTitle,
@@ -238,7 +228,6 @@ fun ModernHeader(
                 }
             }
 
-            // Infos Montant et Bénéficiaires à droite
             Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = "${totalCost.toLocaleString()} F",
@@ -284,7 +273,9 @@ fun StepProgressBar(totalSteps: Int, currentStep: Int, modifier: Modifier = Modi
 @Composable
 fun SectionCard(title: String, icon: ImageVector, content: @Composable ColumnScope.() -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 16.dp),
         shape = AppShapes.MediumRadius,
         colors = CardDefaults.cardColors(containerColor = AppColors.SurfaceBackground),
         border = BorderStroke(1.dp, AppColors.BorderColor)
@@ -301,7 +292,9 @@ fun SectionCard(title: String, icon: ImageVector, content: @Composable ColumnSco
     }
 }
 
-// --- Sections du formulaire ---
+// ─────────────────────────────────────────────────────────────────
+// ── COMPOSANTS DE SAISIE
+// ─────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -383,7 +376,9 @@ fun AppDatePickerField(
     }
 }
 
-// --- Sections du formulaire ---
+// ─────────────────────────────────────────────────────────────────
+// ── SECTIONS DU FORMULAIRE
+// ─────────────────────────────────────────────────────────────────
 
 @Composable
 fun IdentitySection(state: AddAdherentUiState, viewModel: AddAdherentViewModel) {
@@ -505,33 +500,53 @@ fun LocationSection(state: AddAdherentUiState, viewModel: AddAdherentViewModel) 
 @Composable
 fun PhotosSection(state: AddAdherentUiState, viewModel: AddAdherentViewModel) {
     SectionCard("Documents", Icons.Outlined.CameraAlt) {
+        // ✅ Photo principale - affiche soit la nouvelle selection, soit l'existante
         ImagePickerComponent(
             label = "Photo d'identité*",
-            imageUri = state.photoUri.toString(),
+            imageUri = state.photoUri?.toString() ?: state.existingPhotoUrl,
             onImageSelected = viewModel::updatePhotoUri,
             required = true,
             isError = state.validationErrors.containsKey("photoUri")
         )
         Spacer(modifier = Modifier.height(12.dp))
-        ImagePickerComponent(label = "CNI Recto", imageUri = state.rectoUri.toString(), onImageSelected = viewModel::updateRectoUri)
+
+        // ✅ Recto - affiche soit la nouvelle selection, soit l'existant
+        ImagePickerComponent(
+            label = "CNI Recto",
+            imageUri = state.rectoUri?.toString() ?: state.existingRectoUrl,
+            onImageSelected = viewModel::updateRectoUri
+        )
         Spacer(modifier = Modifier.height(12.dp))
-        ImagePickerComponent(label = "CNI Verso", imageUri = state.versoUri.toString(), onImageSelected = viewModel::updateVersoUri)
+
+        // ✅ Verso - affiche soit la nouvelle selection, soit l'existant
+        ImagePickerComponent(
+            label = "CNI Verso",
+            imageUri = state.versoUri?.toString() ?: state.existingVersoUrl,
+            onImageSelected = viewModel::updateVersoUri
+        )
     }
 }
 
 @Composable
-fun BeneficiariesSection(state: AddAdherentUiState, viewModel: AddAdherentViewModel, onShowAlert: (String, String, () -> Unit) -> Unit) {
+fun BeneficiariesSection(
+    state: AddAdherentUiState,
+    viewModel: AddAdherentViewModel,
+    onShowAlert: (String, String, () -> Unit) -> Unit
+) {
     SectionCard("Bénéficiaires", Icons.Outlined.Group) {
         state.dependants.forEachIndexed { index, dep ->
             AppDependantCard(
                 dependant = dep,
                 onEdit = { viewModel.showEditDependantModal(index, dep) },
                 onDelete = {
-                    onShowAlert("Supprimer", "Retirer ce bénéficiaire ?") { viewModel.removeDependant(index) }
+                    onShowAlert("Supprimer", "Retirer ce bénéficiaire ?") {
+                        viewModel.removeDependant(index)
+                    }
                 }
             )
             Spacer(modifier = Modifier.height(8.dp))
         }
+
         OutlinedButton(
             onClick = { viewModel.showAddDependantModal() },
             modifier = Modifier.fillMaxWidth(),
@@ -540,6 +555,7 @@ fun BeneficiariesSection(state: AddAdherentUiState, viewModel: AddAdherentViewMo
             colors = ButtonDefaults.outlinedButtonColors(contentColor = AppColors.BrandBlue)
         ) {
             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
             Text("Ajouter une personne")
         }
     }
@@ -561,16 +577,12 @@ fun AppDependantCard(
         ),
         shape = AppShapes.SmallRadius
     ) {
-        Column(
-            modifier = Modifier.padding(14.dp)
-        ) {
+        Column(modifier = Modifier.padding(14.dp)) {
             Row(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "${dependant.prenoms} ${dependant.nom}",
                         fontSize = 16.sp,
@@ -592,9 +604,7 @@ fun AppDependantCard(
                     )
                 }
 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Icon(
                         imageVector = Icons.Default.Create,
                         contentDescription = "Modifier",
@@ -630,11 +640,16 @@ fun SimpleNavigation(
     modifier: Modifier = Modifier
 ) {
     val isLastStep = currentStep == totalSteps - 1
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         if (currentStep > 0) {
             OutlinedButton(
                 onClick = onPrevious,
-                modifier = Modifier.weight(1f).height(50.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(50.dp),
                 shape = AppShapes.MediumRadius,
                 border = BorderStroke(1.dp, AppColors.BorderColor),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = AppColors.TextSub)
@@ -645,7 +660,9 @@ fun SimpleNavigation(
 
         Button(
             onClick = if (isLastStep) onSubmit else onNext,
-            modifier = Modifier.weight(1f).height(50.dp),
+            modifier = Modifier
+                .weight(1f)
+                .height(50.dp),
             enabled = !isLoading,
             shape = AppShapes.MediumRadius,
             colors = ButtonDefaults.buttonColors(containerColor = AppColors.BrandBlue)
@@ -670,7 +687,12 @@ fun SimpleNavigation(
 }
 
 @Composable
-fun SimpleAlertDialog(title: String, message: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun SimpleAlertDialog(
+    title: String,
+    message: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title, fontWeight = FontWeight.Bold, color = AppColors.TextMain) },
@@ -686,17 +708,15 @@ fun SimpleAlertDialog(title: String, message: String, onConfirm: () -> Unit, onD
     )
 }
 
-
 @Composable
 fun AppProgressIndicator(
-    progress: Float? = null, // Si null, il tourne indéfiniment
+    progress: Float? = null,
     modifier: Modifier = Modifier.size(24.dp),
     color: Color = AppColors.BrandBlue,
     trackColor: Color = AppColors.BrandBlue.copy(alpha = 0.1f),
     strokeWidth: Dp = 3.dp
 ) {
     if (progress != null) {
-        // --- Version déterminée (pour l'upload) ---
         val animatedProgress by animateFloatAsState(
             targetValue = progress.coerceIn(0f, 1f),
             animationSpec = ProgressIndicatorDefaults.ProgressAnimationSpec,
@@ -705,9 +725,7 @@ fun AppProgressIndicator(
 
         Canvas(modifier = modifier) {
             val stroke = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
-            // Rail (fond)
             drawCircle(color = trackColor, style = stroke)
-            // Progression
             drawArc(
                 color = color,
                 startAngle = -90f,
@@ -717,7 +735,6 @@ fun AppProgressIndicator(
             )
         }
     } else {
-        // --- Version indéterminée (le spinner qui tourne) ---
         val infiniteTransition = rememberInfiniteTransition(label = "loading")
         val angle by infiniteTransition.animateFloat(
             initialValue = 0f,
@@ -735,14 +752,13 @@ fun AppProgressIndicator(
             drawArc(
                 color = color,
                 startAngle = angle,
-                sweepAngle = 90f, // Longueur du trait qui tourne
+                sweepAngle = 90f,
                 useCenter = false,
                 style = stroke
             )
         }
     }
 }
-// --- Composants AppTheme ---
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
