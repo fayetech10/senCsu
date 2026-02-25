@@ -67,6 +67,20 @@ fun AdherentDetailsScreen(
     var showAddPersonneModal by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
 
+    // Refresh data when returning to this screen
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.refresh()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     LaunchedEffect(Unit) {
         viewModel.uiEvent.collect { event ->
             when (event) {
@@ -308,11 +322,16 @@ private fun AdherentContent(
             }
         }
 
+        // Dans AdherentContent, remplacez la section Finances par :
         item {
             ModernSection(title = "Finances", icon = Icons.Outlined.Payments) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                     CotisationTimelineCard(cotisations)
-                     PaymentStatusCard(adherent, paiements, sessionManager)
+                    CotisationTimelineCard(cotisations)
+                    PaymentStatusCard(
+                        adherent = adherent,
+                        paiements = paiements,
+                        onPaymentClick = { url -> viewModel.openImagePreview(url) } // On utilise la même logique que pour la CNI
+                    )
                 }
             }
         }
@@ -775,8 +794,11 @@ private fun CotisationTimelineCard(cotisations: List<CotisationDto>) {
 
 @Composable
 @RequiresApi(Build.VERSION_CODES.O)
-private fun PaymentStatusCard(adherent: AdherentDto, paiements: List<PaiementDto>, sessionManager: SessionManager) {
-    // Logique existante simplifiée visuellement
+private fun PaymentStatusCard(
+    adherent: AdherentDto,
+    paiements: List<PaiementDto>,
+    onPaymentClick: (String) -> Unit // Nouveau paramètre
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = AppColors.SurfaceBackground),
@@ -784,37 +806,51 @@ private fun PaymentStatusCard(adherent: AdherentDto, paiements: List<PaiementDto
         border = BorderStroke(1.dp, AppColors.BorderColor)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-             Text(
+            Text(
                 "Historique Paiements",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = AppColors.TextMain
             )
-            
+
             Spacer(modifier = Modifier.height(12.dp))
 
             if (paiements.isEmpty()) {
                 Text("Aucun paiement enregistré", style = MaterialTheme.typography.bodyMedium, color = AppColors.TextSub)
             } else {
-                paiements.take(3).forEach {
-                     PaymentItemRow(it)
-                     if (it != paiements.take(3).last()) {
-                         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = AppColors.BorderColor)
-                     }
+                paiements.take(3).forEach { paiement ->
+                    PaymentItemRow(
+                        paiement = paiement,
+                        onClick = {
+                            paiement.photoPaiement?.let { url -> onPaymentClick(url) }
+                        }
+                    )
+                    if (paiement != paiements.take(3).last()) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            thickness = 0.5.dp,
+                            color = AppColors.BorderColor
+                        )
+                    }
                 }
             }
         }
     }
 }
-
 @Composable
-private fun PaymentItemRow(paiement: PaiementDto) {
+private fun PaymentItemRow(
+    paiement: PaiementDto,
+    onClick: () -> Unit // Ajout du callback de clic
+) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick) // Rendre la ligne cliquable
+            .padding(vertical = 4.dp), // Un peu d'espace pour faciliter le clic
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 paiement.reference,
                 style = MaterialTheme.typography.bodyMedium,
@@ -827,16 +863,25 @@ private fun PaymentItemRow(paiement: PaiementDto) {
                 color = AppColors.TextSub
             )
         }
-        
-        Text(
-             "+${String.format("%,.0f", paiement.montant)} F",
-             style = MaterialTheme.typography.bodyMedium,
-             fontWeight = FontWeight.Bold,
-             color = AppColors.StatusGreen
-        )
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "+${String.format("%,.0f", paiement.montant)} F",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = AppColors.StatusGreen
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            // Petit indicateur visuel pour montrer qu'il y a un reçu
+            Icon(
+                Icons.Rounded.ReceiptLong,
+                contentDescription = null,
+                tint = AppColors.BrandBlue.copy(alpha = 0.5f),
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }
-
 
 @Composable
 private fun BeneficiariesSection(

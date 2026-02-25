@@ -74,7 +74,7 @@ interface ApiService {
         @Path("pcId") pcId: Long
     )
 
-    @PUT("/api/adherents/{id}")
+    @PUT("/api/adherents/update/{id}")
     suspend fun updateAdherent(
         @Path("id") id: Long,
         @Body adherent: AdherentUpdateDto
